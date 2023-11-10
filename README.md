@@ -6,7 +6,7 @@ This app helps you get comfortable with french numbers in range from 0 to 100.
 
 ```bash
 $ ./french_number_practice.py
-input the range to ask (from, to]: 70 100
+input the range to ask [from, to): 70 100
 soixante-seize: 76
 good guess!
 quatre-vingt-trois: 93
@@ -83,7 +83,7 @@ qquatre-vingt-neuf: 87
 guess again
 qquatre-vingt-neuf: 80
 guess again
-qquatre-vingt-neuf: 89
+quatre-vingt-neuf: 89
 good guess!
 quatre-vingt-quatorze: 92
 guess again
