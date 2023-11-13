@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import random
+from collections import deque
 
 
 def validate_range(start, end):
@@ -35,33 +36,49 @@ try:
 except KeyboardInterrupt:
     pass
 
+
+def prepare_problem_set():
+    manage = [False] * len(french)
+    problem_set = []
+    while len(problem_set) < problems:
+        problem = random.randint(start, end - 1)
+        if not manage[problem]:
+            problem_set.append(problem)
+            manage[problem] = True
+    return problem_set
+
+
 start, end = validate_range(start, end)
 problems = end - start
 correct_successive = 0
 correct_cumulative = 0
 attempt_cumulative = 0
 solved = [False] * end
+problem_sets = deque(prepare_problem_set())
 
 try:
-    while correct_cumulative < problems:
-        correct = random.randint(start, end - 1)
-        if solved[correct]:
-            continue
+    while problem_sets:
+        correct = problem_sets.pop()
+        # if solved[correct]:
+        #     continue
         not_valid = True
         while not_valid:
             guess = input(f"{french[correct]}: ")
             if guess == "quit":
-                solved[correct] = True
+                # solved[correct] = True
+                problem_sets.appendleft(correct)
                 give_up(correct)
                 break
             elif not validate_input(guess):
+                print(f"the value is out of range!")
                 continue
             elif int(guess) != correct:
                 print("guess again")
+                problem_sets.appendleft(correct)
                 correct_successive = 0
             else:
-                print("good guess!" if correct_successive <
-                      1 else f"good guess! (consecutive good answers: {correct_successive})")
+                print("good guess!" if correct_successive < 1 else
+                      f"good guess! (consecutive good answers: {correct_successive})")
                 solved[correct] = True
                 correct_successive += 1
                 correct_cumulative += 1
