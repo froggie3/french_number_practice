@@ -16,21 +16,21 @@ class PlayData:
     time_elapsed = 10e9
     time_started = 0
 
-    def max_correct_successive(self,):
+    def max_correct_successive(self,) -> int:
         return max(self.correct_successive_history)
 
-    def problems_count(self, start, end):
+    def problems_count(self, start: int, end: int) ->int:
         return end - start
 
-    def timer_start(self,):
+    def timer_start(self,) -> None:
         self.time_started = time()
 
-    def timer_stop(self,):
+    def timer_stop(self,) -> None:
         self.time_elapsed = time() - self.time_started
         # print(f"{self.time_started=}")
         # print(f"{self.time_elapsed=}")
 
-    def total_problems_solved(self,):
+    def total_problems_solved(self,) -> int:
         return len(self.solved_problems)
 
 
@@ -71,7 +71,7 @@ def show_end_message() -> None:
     print(f"total time spent: {pdata.time_elapsed}")
 
 
-def say_compliment():
+def say_compliment() -> None:
     if pdata.correct_successive < 1:
         print("good guess!")
     else:
