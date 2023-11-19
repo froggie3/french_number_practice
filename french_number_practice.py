@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
 
 import sys
-import random
-from typing import List, Tuple
-
 from collections import deque
-
+from random import shuffle
+from typing import Tuple
 
 def validate_range(start: int, end: int) -> Tuple[int, int]:
     if start < 0:
@@ -31,21 +29,7 @@ def give_up(correct_answer: int) -> None:
     print(f"the answer: {correct_answer}")
 
 
-def prepare_problem_set() -> List[int]:
-    added = [False] * french_numbers_count
-    problem_set = []
-    added_count = 0
-    while added_count < problems_count:
-        problem = random.randint(start, end - 1)
-        if not added[problem]:
-            problem_set.append(problem)
-            added[problem] = True
-            added_count += 1
-    return problem_set
-
-
 if __name__ == "__main__":
-
     french_numbers = ["zéro", "un", "deux", "trois", "quatre", "cinq", "six", "sept", "huit", "neuf", "dix", "onze", "douze", "treize", "quatorze", "quinze", "seize", "dix-sept", "dix-huit", "dix-neuf", "vingt", "vingt et un", "vingt-deux", "vingt-trois", "vingt-quatre", "vingt-cinq", "vingt-six", "vingt-sept", "vingt-huit", "vingt-neuf", "trente", "trente et un", "trente-deux", "trente-trois", "trente-quatre", "trente-cinq", "trente-six", "trente-sept", "trente-huit", "trente-neuf", "quarante", "quarante et un", "quarante-deux", "quarante-trois", "quarante-quatre", "quarante-cinq", "quarante-six", "quarante-sept", "quarante-huit", "quarante-neuf", "cinquante", "cinquante et un", "cinquante-deux", "cinquante-trois", "cinquante-quatre", "cinquante-cinq", "cinquante-six", "cinquante-sept", "cinquante-huit", "cinquante-neuf",
                       "soixante", "soixante et un", "soixante-deux", "soixante-trois", "soixante-quatre", "soixante-cinq", "soixante-six", "soixante-sept", "soixante-huit", "soixante-neuf", "soixante-dix", "soixante et onze", "soixante-douze", "soixante-treize", "soixante-quatorze", "soixante-quinze", "soixante-seize", "soixante-dix-sept", "soixante-dix-huit", "soixante-dix-neuf", "quatre-vingt", "quatre-vingt-un", "quatre-vingt-deux", "quatre-vingt-trois", "quatre-vingt-quatre", "quatre-vingt-cinq", "quatre-vingt-six", "quatre-vingt-sept", "quatre-vingt-huit", "quatre-vingt-neuf", "quatre-vingt-dix", "quatre-vingt et onze", "quatre-vingt-douze", "quatre-vingt-treize", "quatre-vingt-quatorze", "quatre-vingt-quinze", "quatre-vingt-seize", "quatre-vingt-dix-sept", "quatre-vingt-dix-huit", "quatre-vingt-dix-neuf", "cent"]
     french_numbers_count = len(french_numbers)
@@ -61,7 +45,9 @@ if __name__ == "__main__":
     correct_successive = 0
     correct_cumulative = 0
     attempt_cumulative = 0
-    queue = deque(prepare_problem_set())
+    problem_set = list(range(start, end + 1))
+    shuffle(problem_set)
+    queue = deque(problem_set)
 
     while queue:
         correct_answer = queue.pop()
