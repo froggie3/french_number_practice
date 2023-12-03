@@ -47,18 +47,14 @@ def validate_range(start: int, end: int) -> Tuple[int, int]:
     return max(0, start), min(end, len(french_numbers)) + 1
 
 
-def isdigit_wrapper(input_str: str) -> bool:
-    if input_str.isdigit():
-        return True
-    print("please enter a number")
-    return False
-
-
-def problem_validate_range(input_str: str) -> bool:
-    if start <= int(input_str) < end:
-        return True
-    print(f"the value must be within a value from {start} to {end}")
-    return False
+def problem_is_input_valid(input_str: str) -> bool:
+    if not input_str.isdigit():
+        print("please enter a number")
+        return False
+    if not start <= int(input_str) < end:
+        print(f"the value must be within a value from {start} to {end}")
+        return False
+    return True
 
 
 def show_end_message() -> None:
@@ -135,7 +131,7 @@ if __name__ == "__main__":
                 queue.appendleft(correct_answer)
                 show_correct_answer(correct_answer)
                 break
-            elif not (isdigit_wrapper(guess) or problem_validate_range(guess)):
+            elif not problem_is_input_valid(guess):
                 continue
             elif int(guess) != correct_answer:
                 print("guess again")
