@@ -1,19 +1,29 @@
+#!/usr/bin/env python3.13
+
 from french_number_practice import *
 import unittest
 
 
 class TestValidator(unittest.TestCase):
 
-    def test_is_valid(self):
+    def test_is_digit(self):
         v = Validator(PlayData((0, 101)))
         tests = (
-            "101",
-            "-1",
+            "-99",
             "0.1",
-            "2e31",
+            "2e8",
         )
         for test in tests:
-            self.assertFalse(v.is_valid(test))
+            self.assertFalse(v._Validator__is_digit(test))
+
+    def test_is_in_range(self):
+        v = Validator(PlayData((0, 101)))
+        tests = (
+            "999",
+            "-99",
+        )
+        for test in tests:
+            self.assertFalse(v._Validator__is_in_range(test))
 
 
 class TestProblemSetMakerValidator(unittest.TestCase):

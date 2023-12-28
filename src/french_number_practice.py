@@ -15,7 +15,7 @@ type RawInputInterval = list[str]
 
 class Game:
     """
-    A collections of general methods and settings. 
+    A collections of general methods and settings.
     """
 
     MIN_NUMBER = 0
@@ -27,14 +27,14 @@ class Game:
     def __init__(self) -> None:
         pass
 
-    def make_range_pair(self, _range: HalfOpenedInterval) -> OpenedInterval:
+    def make_range_pair(self, coordinates: HalfOpenedInterval) -> OpenedInterval:
         """
         Clips the range within range from 'Game.MAX_NUMBER' to 'Game.MAX_NUMBER',
         extending the max range by one.
         """
         return (
-            max(Game.MIN_NUMBER, _range[Game.START_INDEX]),
-            min(_range[Game.END_INDEX], Game.MAX_NUMBER) + 1
+            max(Game.MIN_NUMBER, coordinates[Game.START_INDEX]),
+            min(coordinates[Game.END_INDEX], Game.MAX_NUMBER) + 1
         )
 
     def get_range(self) -> RawInputInterval:
@@ -71,7 +71,7 @@ class PlayData:
     A class that holds something related to playing status.
     """
 
-    def __init__(self, _range: OpenedInterval) -> None:
+    def __init__(self, coordinates: OpenedInterval) -> None:
         self.attempt_cumulative = 0
         self.correct_successive = 0
         self.correct_successive_history = []
@@ -79,7 +79,7 @@ class PlayData:
         self.solved_problems = set()
         self.time_elapsed = 10e9
         self.time_started = 0
-        self._range = _range
+        self.coordinates = coordinates
 
     def max_correct_successive(self) -> int:
         return max(self.correct_successive_history)
@@ -89,8 +89,6 @@ class PlayData:
 
     def timer_stop(self,) -> None:
         self.time_elapsed = time() - self.time_started
-        # print(f"{self.time_started=}")
-        # print(f"{self.time_elapsed=}")
 
     def total_problems_solved(self,) -> int:
         return len(self.solved_problems)
@@ -99,7 +97,7 @@ class PlayData:
         """
         Counts the number of problem to be solved.
         """
-        return self._range[Game.END_INDEX] - self._range[Game.START_INDEX]
+        return self.coordinates[Game.END_INDEX] - self.coordinates[Game.START_INDEX]
 
 
 class Play:
@@ -175,7 +173,9 @@ class Play:
     def show_end_message(self) -> None:
         s = self.d.total_problems_solved()
         a = self.d.count()
+
         m = self.d.mistakes_count
+
         t = self.format_time(self.d.time_elapsed)
         c = self.d.max_correct_successive()
 
@@ -206,16 +206,19 @@ class Validator():
         self.d = data
 
     def is_valid(self, input_str: str) -> bool:
-        if not input_str.isdigit():
+        if not self.__is_digit(input_str):
             print("Please enter a number")
             return False
         if not self.__is_in_range(input_str):
-            p = self.d._range[Game.START_INDEX]
-            q = self.d._range[Game.END_INDEX]
+            p = self.d.coordinates[Game.START_INDEX]
+            q = self.d.coordinates[Game.END_INDEX]
             print(f"The value must be within a value from {p} to {q}")
             return False
 
         return True
+
+    def __is_digit(self, v: str):
+        return v.isdigit()
 
     def __is_in_range(self, v: str):
         return Game.MIN_NUMBER <= int(v) <= Game.MAX_NUMBER
@@ -270,12 +273,12 @@ class ProblemSetMaker():
     Generates a set of numbers.
     """
 
-    def __init__(self, _range: OpenedInterval) -> None:
-        self._range = _range
+    def __init__(self, coordinates: OpenedInterval) -> None:
+        self.coordinates = coordinates
         self.problem_set = []
 
-    def __prepare_problem_set(self, _range: OpenedInterval) -> Self:
-        start, end = _range
+    def __prepare_problem_set(self, coordinates: OpenedInterval) -> Self:
+        start, end = coordinates
         self.problem_set = list(range(start, end))
         return self
 
@@ -287,21 +290,20 @@ class ProblemSetMaker():
         """
         Get a queue of sets of problem, which is shuffled.
         """
-        self.__prepare_problem_set(self._range) \
+        self.__prepare_problem_set(self.coordinates) \
             .__shuffle()
 
         return deque(self.problem_set)
 
 
 if __name__ == "__main__":
-
     g = Game()
 
-    _range: HalfOpenedInterval = tuple(int(x) for x in g.get_range())
-    _range_new = g.make_range_pair(_range)
-    data = PlayData(_range=_range_new)
+    coordinates: HalfOpenedInterval = tuple(int(x) for x in g.get_range())
+    coordinates_new = g.make_range_pair(coordinates)
+    data = PlayData(coordinates=coordinates_new)
 
-    ps = ProblemSetMaker(data._range)
+    ps = ProblemSetMaker(data.coordinates)
     queue = ps.get_queue()
 
     p = Play(queue, data)
