@@ -52,7 +52,7 @@ class Game:
 
         while not validated:
             try:
-                input_str = input("input the range [from, to]: ")
+                input_str = input("Input the range [from, to]: ")
             except KeyboardInterrupt as e:
                 print(e)
                 exit(1)
@@ -84,12 +84,6 @@ class PlayData:
     def max_correct_successive(self) -> int:
         return max(self.correct_successive_history)
 
-    def timer_start(self,) -> None:
-        self.time_started = time()
-
-    def timer_stop(self,) -> None:
-        self.time_elapsed = time() - self.time_started
-
     def total_problems_solved(self,) -> int:
         return len(self.solved_problems)
 
@@ -98,6 +92,41 @@ class PlayData:
         Counts the number of problem to be solved.
         """
         return self.coordinates[Game.END_INDEX] - self.coordinates[Game.START_INDEX]
+
+
+class Timer:
+    """
+    A dedicated class to measure the time taken in execution of a function
+    """
+
+    def __init__(self) -> None:
+        self.time_elapsed = 0.0
+        self.time_started = 0.0
+        self.time_stopped = 0.0
+
+    def __timer_start(self) -> None:
+        self.time_started = time()
+
+    def __timer_stop(self) -> None:
+        self.time_stopped = time()
+        self.time_elapsed = self.time_stopped - self.time_started
+
+    def measure_time_execution(self, user_function) -> float:
+        self.__timer_start()
+        user_function()
+        self.__timer_stop()
+        return self.time_elapsed
+
+    @staticmethod
+    def display_time_elapsed(time_elapsed: float) -> str:
+        def calculate_time_elapsed(time_elapsed: float):
+            rounded_time = int(time_elapsed)
+            hour, second = divmod(rounded_time, 3600)
+            minute, second = divmod(second, 60)
+            milisecond = time_elapsed - rounded_time
+            return hour, minute, second, milisecond
+        _, minute, second, milisecond = calculate_time_elapsed(time_elapsed)
+        return f"%01d:%02d.%s" % (minute, second, str(milisecond)[2:][:3])
 
 
 class Play:
@@ -113,8 +142,7 @@ class Play:
         self.d = data
         self.queue: deque = queue
 
-    def play(self):
-        self.d.timer_start()
+    def enable_loop(self):
         self.v = Validator(data=self.d)
 
         while self.queue:
@@ -152,23 +180,12 @@ class Play:
                     is_solved = True
 
                 self.d.attempt_cumulative += 1
-        else:
-            print("You solved all! Well done.")
-            self.finalize_app()
+        self.d.correct_successive_history.append(self.d.correct_successive)
 
-    def finalize_app(self) -> None:
-        self.d.timer_stop()
-        self.d.correct_successive_history.append(
-            self.d.correct_successive
-        )
+    def play(self):
+        timer = Timer()
+        self.d.time_elapsed = timer.measure_time_execution(self.enable_loop)
         self.show_end_message()
-
-    def format_time(self, t: float) -> str:
-        a = int(t)
-        m = a // 60
-        s = a % 60
-        mm = str(t - a)[2:][:3]
-        return f"%d:%02d.%s" % (m, s, mm)
 
     def show_end_message(self) -> None:
         s = self.d.total_problems_solved()
@@ -176,15 +193,14 @@ class Play:
 
         m = self.d.mistakes_count
 
-        t = self.format_time(self.d.time_elapsed)
+        t = Timer.display_time_elapsed(self.d.time_elapsed)
         c = self.d.max_correct_successive()
 
-        print()
-        print(f"Summary:")
-        print(f"  Total problems solved: {s} / {a}")
-        print(f"  Total mistakes made: {m}")
-        print(f"  Maximum successive correct answer: {c}")
-        print(f"  Total time spent: {t}")
+        print(f"You solved all! Here's the summery:")
+        print(f"  Total problems solved              {s} / {a}")
+        print(f"  Total mistakes made                {m}")
+        print(f"  Maximum successive correct answer  {c}")
+        print(f"  Total time spent                   {t}")
 
     def say_compliment(self) -> None:
         a = self.d.correct_successive
