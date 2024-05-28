@@ -58,22 +58,13 @@ class HalfOpenedInterval(Interval):
 
 
 class TimerResult:
-    def __init__(self, time_elapsed: float) -> None:
-        self.time_elapsed = time_elapsed
+    def __init__(self, seconds: float) -> None:
+        self.seconds = seconds
 
-    def __calculate_time_elapsed(self):
-        rounded_time = int(self.time_elapsed)
-        self.hour, self.second = divmod(rounded_time, 3600)
-        self.minute, self.second = divmod(self.second, 60)
-        self.milisecond = self.time_elapsed - rounded_time
-
-        return Self
-
-    def display_time_elapsed(self) -> str:
-        self.__calculate_time_elapsed()
-        return f"%01d:%02d.%.3f" % (
-            self.minute, self.second, self.milisecond
-        )
+    def display_time_elapsed(self):
+        minutes, remainder = divmod(self.seconds, 60)
+        seconds = round(remainder, 3)
+        return "{:02d}:{:06.3f}".format(int(minutes), seconds)
 
 
 class Timer:
@@ -82,15 +73,15 @@ class Timer:
     """
 
     def __init__(self) -> None:
-        self.time_elapsed = 0.0
-        self.time_started = 0.0
+        self.elapsed_seconds = 0.0
+        self.started_seconds = 0.0
 
     def start(self) -> Self:
-        self.time_started = time()
+        self.started_seconds = time()
         return self
 
     def stop(self) -> Self:
-        self.time_elapsed = time() - self.time_started
+        self.elapsed_seconds = time() - self.started_seconds
         return self
 
     def execute(self, user_function) -> Self:
@@ -98,7 +89,7 @@ class Timer:
         return self
 
     def retrieve_result(self) -> TimerResult:
-        return TimerResult(self.time_elapsed)
+        return TimerResult(self.elapsed_seconds)
 
 
 class PlayingStatus:
@@ -151,89 +142,6 @@ class PlayingStatus:
             print(f"  {line}")
 
 
-class Play:
-    """
-    A set of primary routines.
-    """
-
-    def __init__(self, queue: deque, playing_status: PlayingStatus, config: Config) -> None:
-        self.config: Config = config
-
-        generate_word_range = HalfOpenedInterval(
-            self.config.MIN_NUMBER,
-            self.config.MAX_NUMBER
-        ).to_opened_interval()
-
-        self.french_numbers = [
-            num2words(i, lang=self.config.LANGUAGE)
-            for i in range(generate_word_range.start, generate_word_range.end)
-        ]
-        self.playing_status = playing_status
-        self.queue: deque = queue
-
-    def enable_loop(self):
-        self.validator = Validator(
-            InplayingValidator(self.playing_status.coordinates, self.config)
-        ).validator
-
-        while self.queue:
-            correct_answer = self.queue.pop()
-            is_solved = False
-
-            while not is_solved:
-                try:
-                    display = self.french_numbers[correct_answer]
-                    guess = input(f"{display}: ")
-                except KeyboardInterrupt as e:
-                    print(e)
-                    self.show_correct_answer(correct_answer)
-                    return
-
-                if guess == "quit":
-                    self.queue.appendleft(correct_answer)
-                    self.show_correct_answer(correct_answer)
-                    break
-                elif not self.validator.is_valid(guess):
-                    continue
-                elif int(guess) != correct_answer:
-                    print("Guess again")
-                    self.queue.appendleft(correct_answer)
-                    self.playing_status.correct_successive_history.append(
-                        self.playing_status.correct_successive
-                    )
-                    self.playing_status.correct_successive = 0
-                    self.playing_status.mistakes_count += 1
-                else:
-                    self.say_compliment()
-                    self.playing_status.correct_successive += 1
-                    self.playing_status.solved_problems.add(correct_answer)
-                    is_solved = True
-
-                self.playing_status.attempt_cumulative += 1
-        self.playing_status.correct_successive_history.append(
-            self.playing_status.correct_successive
-        )
-
-    def play(self) -> PlayingStatus:
-        self.playing_status.timer_result = self.playing_status.timer.start(
-        ).execute(
-            self.enable_loop
-        ).stop(
-        ).retrieve_result()
-
-        return self.playing_status
-
-    def say_compliment(self) -> None:
-        a = self.playing_status.correct_successive
-        if a < 1:
-            print("Good guess!")
-            return
-        print("Good guess! " f"(consecutive good answers: {a})")
-
-    def show_correct_answer(self, correct_answer: int) -> None:
-        print(f"The answer: {correct_answer}")
-
-
 class Validator:
     def __init__(self, validator) -> None:
         self.validator = validator
@@ -247,7 +155,7 @@ class InplayingValidator:
     def __init__(self, coordinates: OpenedInterval, config: Config) -> None:
         self.coordinates = coordinates
         self.config = config
-    
+
     def is_valid(self, input_str: str):
         try:
             try:
@@ -323,6 +231,77 @@ class ProblemSetMaker():
         return deque(self.problem_set)
 
 
+class Play:
+    """
+    A set of primary routines.
+    """
+
+    def __init__(self, queue: deque, playing_status: PlayingStatus, validator: InplayingValidator, french_numbers: list) -> None:
+        self.queue = queue
+        self.playing_status = playing_status
+        self.validator = validator
+        self.french_numbers = french_numbers
+
+    def enable_loop(self):
+        while self.queue:
+            correct_answer = self.queue.pop()
+            is_solved = False
+
+            while not is_solved:
+                try:
+                    display = self.french_numbers[correct_answer]
+                    guess = input(f"{display}: ")
+                except KeyboardInterrupt as e:
+                    print(e)
+                    self.show_correct_answer(correct_answer)
+                    return
+
+                if guess == "quit":
+                    self.queue.appendleft(correct_answer)
+                    self.show_correct_answer(correct_answer)
+                    break
+                elif not self.validator.is_valid(guess):
+                    continue
+                elif int(guess) != correct_answer:
+                    print("Guess again")
+                    self.queue.appendleft(correct_answer)
+                    self.playing_status.correct_successive_history.append(
+                        self.playing_status.correct_successive
+                    )
+                    self.playing_status.correct_successive = 0
+                    self.playing_status.mistakes_count += 1
+                else:
+                    self.say_compliment()
+                    self.playing_status.correct_successive += 1
+                    self.playing_status.solved_problems.add(correct_answer)
+                    is_solved = True
+
+                self.playing_status.attempt_cumulative += 1
+        self.playing_status.correct_successive_history.append(
+            self.playing_status.correct_successive
+        )
+
+    def play(self) -> PlayingStatus:
+        self.playing_status.timer_result = self.playing_status.timer.start(
+        ).execute(
+            self.enable_loop
+        ).stop(
+        ).retrieve_result()
+
+        return self.playing_status
+
+    def say_compliment(self) -> None:
+        if self.playing_status.correct_successive < 1:
+            print("Good guess!")
+            return
+        print("Good guess! (consecutive good answers: {0:<d})".format(
+            self.playing_status.correct_successive
+        ))
+
+    def show_correct_answer(self, correct_answer: int) -> None:
+        print(f"The answer: {correct_answer}")
+
+
 class Game:
     """
     A collections of general methods and settings.
@@ -388,14 +367,22 @@ class Game:
 
         return coordinates
 
-    def play(self):
+    def prepare_french_numbers(self, coodinates: OpenedInterval) -> list:
+        return [
+            num2words(i, lang=self.config.LANGUAGE)
+            for i in range(coodinates.start, coodinates.end)
+        ]
+
+    def play(self) -> None:
         coordinates = self.get_cordinates_input()
 
         p = Play(
             ProblemSetMaker(coordinates).get_queue(),
             PlayingStatus(coordinates, Timer(),),
-            self.config,
+            Validator(InplayingValidator(coordinates, self.config)).validator,
+            self.prepare_french_numbers(coordinates),
         )
+
         play_result = p.play()
         play_result.show_end_message()
 
