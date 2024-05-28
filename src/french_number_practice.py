@@ -103,39 +103,32 @@ class Game:
 
             validated = validator.is_valid()
 
-            coordinates = HalfOpenedInterval(start, end) \
-                .limit_bottom(self.config.MIN_NUMBER) \
-                .limit_top(self.config.MAX_NUMBER) \
-                .to_opened_interval()
+            coordinates = HalfOpenedInterval(
+                start, end
+            ).limit_bottom(
+                self.config.MIN_NUMBER
+            ).limit_top(
+                self.config.MAX_NUMBER
+            ).to_opened_interval()
         return coordinates
 
 
-class PlayingStatus:
-    """
-    A class that holds something related to playing status.
-    """
+class TimerResult:
+    def __init__(self, time_elapsed: float) -> None:
+        self.time_elapsed = time_elapsed
 
-    def __init__(self, coordinates: OpenedInterval) -> None:
-        self.attempt_cumulative = 0
-        self.correct_successive = 0
-        self.correct_successive_history = []
-        self.mistakes_count = 0
-        self.solved_problems = set()
-        self.time_elapsed = 10e9
-        self.time_started = 0
-        self.coordinates = coordinates
+    def __calculate_time_elapsed(self):
+        rounded_time = int(self.time_elapsed)
+        self.hour, self.second = divmod(rounded_time, 3600)
+        self.minute, self.second = divmod(self.second, 60)
+        self.milisecond = self.time_elapsed - rounded_time
+        return Self
 
-    def max_correct_successive(self) -> int:
-        return max(self.correct_successive_history)
-
-    def total_problems_solved(self,) -> int:
-        return len(self.solved_problems)
-
-    def count(self) -> int:
-        """
-        Counts the number of problem to be solved.
-        """
-        return self.coordinates.end - self.coordinates.start
+    def display_time_elapsed(self) -> str:
+        self.__calculate_time_elapsed()
+        return f"%01d:%02d.%.3f" % (
+            self.minute, self.second, self.milisecond
+        )
 
 
 class Timer:
@@ -146,31 +139,71 @@ class Timer:
     def __init__(self) -> None:
         self.time_elapsed = 0.0
         self.time_started = 0.0
-        self.time_stopped = 0.0
 
-    def __timer_start(self) -> None:
+    def start(self) -> Self:
         self.time_started = time()
+        return self
 
-    def __timer_stop(self) -> None:
-        self.time_stopped = time()
-        self.time_elapsed = self.time_stopped - self.time_started
+    def stop(self) -> Self:
+        self.time_elapsed = time() - self.time_started
+        return self
 
-    def measure_time_execution(self, user_function) -> float:
-        self.__timer_start()
+    def execute(self, user_function) -> Self:
         user_function()
-        self.__timer_stop()
-        return self.time_elapsed
+        return self
 
-    @staticmethod
-    def display_time_elapsed(time_elapsed: float) -> str:
-        def calculate_time_elapsed(time_elapsed: float):
-            rounded_time = int(time_elapsed)
-            hour, second = divmod(rounded_time, 3600)
-            minute, second = divmod(second, 60)
-            milisecond = time_elapsed - rounded_time
-            return hour, minute, second, milisecond
-        _, minute, second, milisecond = calculate_time_elapsed(time_elapsed)
-        return f"%01d:%02d.%s" % (minute, second, str(milisecond)[2:][:3])
+    def retrieve_result(self) -> TimerResult:
+        return TimerResult(self.time_elapsed)
+
+
+class PlayingStatus:
+    """
+    A class that holds something related to playing status.
+    ステートレスにしたい！
+    """
+
+    def __init__(self, coordinates: OpenedInterval, timer: Timer) -> None:
+        self.attempt_cumulative = 0
+        self.correct_successive = 0
+        self.correct_successive_history = []
+        self.mistakes_count = 0
+        self.solved_problems = set()
+        self.time_elapsed = 10e9
+        self.time_started = 0
+        self.coordinates = coordinates
+        self.timer = timer
+        self.timer_result = TimerResult(0.0)
+
+    def count(self) -> int:
+        """
+        Counts the number of problem to be solved.
+        """
+        return self.coordinates.end - self.coordinates.start
+
+    def show_end_message(self) -> None:
+        lines = [
+            "{0:<40} {1} / {2}".format(
+                "Total problems solved",
+                len(self.solved_problems),
+                self.count()
+            ),
+            "{0:<40} {1}".format(
+                "Total mistakes made",
+                self.mistakes_count
+            ),
+            "{0:<40} {1}".format(
+                "Maximum successive correct answer",
+                max(self.correct_successive_history)
+            ),
+            "{0:<40} {1}".format(
+                "Total time spent",
+                self.timer_result.display_time_elapsed()
+            ),
+        ]
+
+        print("You solved all! Here's the summary:")
+        for line in lines:
+            print(f"  {line}")
 
 
 class Play:
@@ -184,8 +217,7 @@ class Play:
         generate_word_range = HalfOpenedInterval(
             self.config.MIN_NUMBER,
             self.config.MAX_NUMBER
-        ) \
-            .to_opened_interval()
+        ).to_opened_interval()
 
         self.french_numbers = [
             num2words(i, lang=self.config.LANGUAGE)
@@ -197,8 +229,7 @@ class Play:
     def enable_loop(self):
         self.validator = Validator(
             InplayingValidator(self.playing_status, self.config)
-        ) \
-            .validator
+        ).validator
 
         while self.queue:
             correct_answer = self.queue.pop()
@@ -236,28 +267,19 @@ class Play:
 
                 self.playing_status.attempt_cumulative += 1
         self.playing_status.correct_successive_history.append(
-            self.playing_status.correct_successive)
+            self.playing_status.correct_successive
+        )
 
     def play(self):
-        timer = Timer()
-        self.playing_status.time_elapsed = timer.measure_time_execution(
-            self.enable_loop)
-        self.show_end_message()
+        self.playing_status.timer_result = self.playing_status.timer.start(
+        ).execute(
+            self.enable_loop
+        ).stop(
+        ).retrieve_result()
+        self.playing_status.show_end_message()
 
-    def show_end_message(self) -> None:
-        s = self.playing_status.total_problems_solved()
-        a = self.playing_status.count()
-
-        m = self.playing_status.mistakes_count
-
-        t = Timer.display_time_elapsed(self.playing_status.time_elapsed)
-        c = self.playing_status.max_correct_successive()
-
-        print(f"You solved all! Here's the summary:")
-        print(f"  Total problems solved              {s} / {a}")
-        print(f"  Total mistakes made                {m}")
-        print(f"  Maximum successive correct answer  {c}")
-        print(f"  Total time spent                   {t}")
+    def get_playing_result(self):
+        return self.playing_status
 
     def say_compliment(self) -> None:
         a = self.playing_status.correct_successive
@@ -276,7 +298,6 @@ class Play:
 class Validator():
     def __init__(self, validator) -> None:
         self.validator = validator
-    pass
 
 
 class InplayingValidator:
@@ -300,10 +321,10 @@ class InplayingValidator:
 
         return True
 
-    def __is_digit(self, v: str):
+    def __is_digit(self, v: str) -> bool:
         return v.isdigit()
 
-    def __is_in_range(self, v: str):
+    def __is_in_range(self, v: str) -> bool:
         return self.config.MIN_NUMBER <= int(v) <= self.config.MAX_NUMBER
 
 
@@ -360,8 +381,9 @@ class ProblemSetMaker():
         """
         Get a queue of sets of problem, which is shuffled.
         """
-        self.__prepare_problem_set(self.coordinates) \
-            .__shuffle()
+        self.__prepare_problem_set(
+            self.coordinates
+        ).__shuffle()
 
         return deque(self.problem_set)
 
@@ -371,7 +393,7 @@ if __name__ == "__main__":
     game = Game(config)
 
     coordinates = game.get_range()
-    playing_status = PlayingStatus(coordinates)
+    playing_status = PlayingStatus(coordinates, Timer())
 
     ps = ProblemSetMaker(coordinates)
     queue = ps.get_queue()
