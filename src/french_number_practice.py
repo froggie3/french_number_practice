@@ -9,9 +9,14 @@ from typing import Self
 from num2words import num2words
 
 
+class Config:
+    def __init__(self) -> None:
+        self.MIN_NUMBER = 0
+        self.MAX_NUMBER = 100
+        self.LANGUAGE = "fr"
+
+
 class Interval:
-    start = -1
-    end = -1
 
     def __init__(self, start: int, end: int) -> None:
         self.start = start
@@ -43,74 +48,13 @@ class Interval:
 
 
 class OpenedInterval(Interval):
-    pass
+    def to_half_opened_interval(self):
+        return HalfOpenedInterval(self.start, self.end - 1)
 
 
 class HalfOpenedInterval(Interval):
     def to_opened_interval(self):
         return OpenedInterval(self.start, self.end + 1)
-
-
-class Config:
-    def __init__(self) -> None:
-        self.MIN_NUMBER = 0
-        self.MAX_NUMBER = 100
-        self.LANGUAGE = "fr"
-
-
-class Game:
-    """
-    A collections of general methods and settings.
-    """
-
-    def __init__(self, config: Config) -> None:
-        self.config = config
-
-    def get_range(self) -> OpenedInterval:
-        """
-        Defines a range by a user input.
-        """
-        print(
-            "Specify the two values for the start and end of the range; \n"
-            "The values must be separated by a space:"
-        )
-
-        validated = False
-        split_values = []
-        start, end = -1, -1
-
-        while not validated:
-            try:
-                input_str = input("Input the range [from, to]: ")
-            except KeyboardInterrupt as e:
-                print(e)
-                exit(1)
-
-            split_values = input_str.split()
-
-            if not len(split_values) == 2:
-                print("Two numbers must be entered, separated by a space.")
-                continue
-            elif not all([v.isdigit() for v in split_values]):
-                print("Please enter a number")
-                continue
-
-            start, end = [int(x) for x in split_values]
-            coordinates = HalfOpenedInterval(start, end)
-
-            validator = Validator(ProblemSetMakerValidator(coordinates, self.config)) \
-                .validator
-
-            validated = validator.is_valid()
-
-            coordinates = HalfOpenedInterval(
-                start, end
-            ).limit_bottom(
-                self.config.MIN_NUMBER
-            ).limit_top(
-                self.config.MAX_NUMBER
-            ).to_opened_interval()
-        return coordinates
 
 
 class TimerResult:
@@ -122,6 +66,7 @@ class TimerResult:
         self.hour, self.second = divmod(rounded_time, 3600)
         self.minute, self.second = divmod(self.second, 60)
         self.milisecond = self.time_elapsed - rounded_time
+
         return Self
 
     def display_time_elapsed(self) -> str:
@@ -228,7 +173,7 @@ class Play:
 
     def enable_loop(self):
         self.validator = Validator(
-            InplayingValidator(self.playing_status, self.config)
+            InplayingValidator(self.playing_status.coordinates, self.config)
         ).validator
 
         while self.queue:
@@ -242,8 +187,7 @@ class Play:
                 except KeyboardInterrupt as e:
                     print(e)
                     self.show_correct_answer(correct_answer)
-                    self.finalize_app()
-                    exit(0)
+                    return
 
                 if guess == "quit":
                     self.queue.appendleft(correct_answer)
@@ -270,15 +214,13 @@ class Play:
             self.playing_status.correct_successive
         )
 
-    def play(self):
+    def play(self) -> PlayingStatus:
         self.playing_status.timer_result = self.playing_status.timer.start(
         ).execute(
             self.enable_loop
         ).stop(
         ).retrieve_result()
-        self.playing_status.show_end_message()
 
-    def get_playing_result(self):
         return self.playing_status
 
     def say_compliment(self) -> None:
@@ -291,11 +233,8 @@ class Play:
     def show_correct_answer(self, correct_answer: int) -> None:
         print(f"The answer: {correct_answer}")
 
-    def finalize_app(self):
-        pass
 
-
-class Validator():
+class Validator:
     def __init__(self, validator) -> None:
         self.validator = validator
 
@@ -305,27 +244,27 @@ class InplayingValidator:
     A set of validations to be enabled in playing games.
     """
 
-    def __init__(self, data: PlayingStatus, config: Config) -> None:
-        self.d = data
+    def __init__(self, coordinates: OpenedInterval, config: Config) -> None:
+        self.coordinates = coordinates
         self.config = config
+    
+    def is_valid(self, input_str: str):
+        try:
+            try:
+                int(input_str)
+            except ValueError:
+                raise ValueError("Please enter a number")
 
-    def is_valid(self, input_str: str) -> bool:
-        if not self.__is_digit(input_str):
-            print("Please enter a number")
-            return False
-        if not self.__is_in_range(input_str):
-            p = self.d.coordinates.start
-            q = self.d.coordinates.end
-            print(f"The value must be within a value from {p} to {q}")
+            if not self.coordinates.start <= int(input_str) <= self.coordinates.end:
+                raise ValueError("The value must be within a value from {0:d} to {1:d}".format(
+                    self.coordinates.start,
+                    self.coordinates.end
+                ))
+        except ValueError as e:
+            print(e)
             return False
 
         return True
-
-    def __is_digit(self, v: str) -> bool:
-        return v.isdigit()
-
-    def __is_in_range(self, v: str) -> bool:
-        return self.config.MIN_NUMBER <= int(v) <= self.config.MAX_NUMBER
 
 
 class ProblemSetMakerValidator:
@@ -337,18 +276,14 @@ class ProblemSetMakerValidator:
         self.coordinates = coordinates
         self.config = config
 
-    def is_valid(self) -> bool:
+    def is_valid(self):
         if not self.__is_in_range():
-            print(
-                f"Both start and end must be within a value from "
-                f"{self.config.MIN_NUMBER} to {self.config.MAX_NUMBER}"
-            )
-            return False
+            raise ValueError("Both start and end must be within a value from {0:s} to {1:s}".format(
+                self.config.MIN_NUMBER,
+                self.config.MAX_NUMBER
+            ))
         elif not self.__is_in_range2():
-            print("Start must be less than or equal to end")
-            return False
-
-        return True
+            raise ValueError("Start must be less than or equal to end")
 
     def __is_in_range(self) -> bool:
         return (
@@ -388,17 +323,85 @@ class ProblemSetMaker():
         return deque(self.problem_set)
 
 
+class Game:
+    """
+    A collections of general methods and settings.
+    """
+
+    def __init__(self, config: Config) -> None:
+        self.config = config
+
+    def get_cordinates_input(self) -> OpenedInterval:
+        """
+        Defines a range by a user input.
+        """
+        print(
+            "Specify the two values for the start and end of the range; \n"
+            "The values must be separated by a space:"
+        )
+
+        validated = False
+        coordinates_half_open = HalfOpenedInterval(-1, -1)
+
+        while not validated:
+            try:
+                input_str = input("Input the range [from, to]: ")
+            except KeyboardInterrupt as e:
+                print(e)
+                exit(1)
+
+            split_values = input_str.split()
+
+            try:
+                if not len(split_values) == 2:
+                    raise ValueError(
+                        "Two numbers must be entered, separated by a space."
+                    )
+                elif not all([v.isdigit() for v in split_values]):
+                    raise ValueError(
+                        "Please enter a number"
+                    )
+            except ValueError as e:
+                print(e)
+                continue
+
+            start, end = [int(x) for x in split_values]
+            coordinates_half_open = HalfOpenedInterval(start, end)
+
+            try:
+                Validator(ProblemSetMakerValidator(
+                    coordinates_half_open,
+                    self.config
+                )).validator.is_valid()
+
+            except ValueError as e:
+                print(e)
+                continue
+
+            validated = True
+
+        coordinates = coordinates_half_open.limit_bottom(
+            self.config.MIN_NUMBER
+        ).limit_top(
+            self.config.MAX_NUMBER
+        ).to_opened_interval()
+
+        return coordinates
+
+    def play(self):
+        coordinates = self.get_cordinates_input()
+
+        p = Play(
+            ProblemSetMaker(coordinates).get_queue(),
+            PlayingStatus(coordinates, Timer(),),
+            self.config,
+        )
+        play_result = p.play()
+        play_result.show_end_message()
+
+
 if __name__ == "__main__":
-    config = Config()
-    game = Game(config)
-
-    coordinates = game.get_range()
-    playing_status = PlayingStatus(coordinates, Timer())
-
-    ps = ProblemSetMaker(coordinates)
-    queue = ps.get_queue()
-
-    p = Play(queue, playing_status, config)
-    p.play()
+    game = Game(Config())
+    game.play()
 
     exit(0)

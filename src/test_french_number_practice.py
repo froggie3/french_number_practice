@@ -7,7 +7,7 @@ import unittest
 class TestValidator(unittest.TestCase):
 
     def test_is_digit(self):
-        v = Validator(PlayData((0, 101)))
+        v = Validator(PlayingStatus((0, 101)))
         tests = (
             "-99",
             "0.1",
@@ -17,7 +17,7 @@ class TestValidator(unittest.TestCase):
             self.assertFalse(v._Validator__is_digit(test))
 
     def test_is_in_range(self):
-        v = Validator(PlayData((0, 101)))
+        v = Validator(PlayingStatus((0, 101)))
         tests = (
             "999",
             "-99",
