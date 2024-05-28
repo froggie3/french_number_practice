@@ -8,9 +8,54 @@ from typing import Self
 
 from num2words import num2words
 
-type OpenedInterval = tuple[int, int]
-type HalfOpenedInterval = tuple[int, int]
-type RawInputInterval = list[str]
+
+class Interval:
+    start = -1
+    end = -1
+
+    def __init__(self, start: int, end: int) -> None:
+        self.start = start
+        self.end = end
+
+    def limit_bottom(self, x: int) -> Self:
+        """
+        limit the start value to x.
+           ~~~~~~
+             /
+            /
+        ___/
+           ^------ x
+        """
+        self.start = max(self.start, x)
+        return self
+
+    def limit_top(self, x: int) -> Self:
+        """
+        limit the end value to x.
+              ___
+             /^------ x
+            /
+           /
+        ~~~~~~
+        """
+        self.end = min(self.end, x)
+        return self
+
+
+class OpenedInterval(Interval):
+    pass
+
+
+class HalfOpenedInterval(Interval):
+    def to_opened_interval(self):
+        return OpenedInterval(self.start, self.end + 1)
+
+
+class Config:
+    def __init__(self) -> None:
+        self.MIN_NUMBER = 0
+        self.MAX_NUMBER = 100
+        self.LANGUAGE = "fr"
 
 
 class Game:
@@ -18,26 +63,10 @@ class Game:
     A collections of general methods and settings.
     """
 
-    MIN_NUMBER = 0
-    MAX_NUMBER = 100
-    LANGUAGE = "fr"
-    START_INDEX = 0
-    END_INDEX = 1
+    def __init__(self, config: Config) -> None:
+        self.config = config
 
-    def __init__(self) -> None:
-        pass
-
-    def make_range_pair(self, coordinates: HalfOpenedInterval) -> OpenedInterval:
-        """
-        Clips the range within range from 'Game.MAX_NUMBER' to 'Game.MAX_NUMBER',
-        extending the max range by one.
-        """
-        return (
-            max(Game.MIN_NUMBER, coordinates[Game.START_INDEX]),
-            min(coordinates[Game.END_INDEX], Game.MAX_NUMBER) + 1
-        )
-
-    def get_range(self) -> RawInputInterval:
+    def get_range(self) -> OpenedInterval:
         """
         Defines a range by a user input.
         """
@@ -45,10 +74,10 @@ class Game:
             "Specify the two values for the start and end of the range; \n"
             "The values must be separated by a space:"
         )
-        v = ProblemSetMakerValidator()
 
         validated = False
         split_values = []
+        start, end = -1, -1
 
         while not validated:
             try:
@@ -58,15 +87,30 @@ class Game:
                 exit(1)
 
             split_values = input_str.split()
-            validated = v.is_valid(split_values)
 
-            if not validated:
+            if not len(split_values) == 2:
                 print("Two numbers must be entered, separated by a space.")
+                continue
+            elif not all([v.isdigit() for v in split_values]):
+                print("Please enter a number")
+                continue
 
-        return split_values
+            start, end = [int(x) for x in split_values]
+            coordinates = HalfOpenedInterval(start, end)
+
+            validator = Validator(ProblemSetMakerValidator(coordinates, self.config)) \
+                .validator
+
+            validated = validator.is_valid()
+
+            coordinates = HalfOpenedInterval(start, end) \
+                .limit_bottom(self.config.MIN_NUMBER) \
+                .limit_top(self.config.MAX_NUMBER) \
+                .to_opened_interval()
+        return coordinates
 
 
-class PlayData:
+class PlayingStatus:
     """
     A class that holds something related to playing status.
     """
@@ -91,7 +135,7 @@ class PlayData:
         """
         Counts the number of problem to be solved.
         """
-        return self.coordinates[Game.END_INDEX] - self.coordinates[Game.START_INDEX]
+        return self.coordinates.end - self.coordinates.start
 
 
 class Timer:
@@ -134,16 +178,27 @@ class Play:
     A set of primary routines.
     """
 
-    def __init__(self, queue: deque, data: PlayData) -> None:
+    def __init__(self, queue: deque, playing_status: PlayingStatus, config: Config) -> None:
+        self.config: Config = config
+
+        generate_word_range = HalfOpenedInterval(
+            self.config.MIN_NUMBER,
+            self.config.MAX_NUMBER
+        ) \
+            .to_opened_interval()
+
         self.french_numbers = [
-            num2words(i, lang=Game.LANGUAGE)
-            for i in range(Game.MIN_NUMBER, Game.MAX_NUMBER + 1)
+            num2words(i, lang=self.config.LANGUAGE)
+            for i in range(generate_word_range.start, generate_word_range.end)
         ]
-        self.d = data
+        self.playing_status = playing_status
         self.queue: deque = queue
 
     def enable_loop(self):
-        self.v = Validator(data=self.d)
+        self.validator = Validator(
+            InplayingValidator(self.playing_status, self.config)
+        ) \
+            .validator
 
         while self.queue:
             correct_answer = self.queue.pop()
@@ -163,47 +218,49 @@ class Play:
                     self.queue.appendleft(correct_answer)
                     self.show_correct_answer(correct_answer)
                     break
-                elif not self.v.is_valid(guess):
+                elif not self.validator.is_valid(guess):
                     continue
                 elif int(guess) != correct_answer:
                     print("Guess again")
                     self.queue.appendleft(correct_answer)
-                    self.d.correct_successive_history.append(
-                        self.d.correct_successive
+                    self.playing_status.correct_successive_history.append(
+                        self.playing_status.correct_successive
                     )
-                    self.d.correct_successive = 0
-                    self.d.mistakes_count += 1
+                    self.playing_status.correct_successive = 0
+                    self.playing_status.mistakes_count += 1
                 else:
                     self.say_compliment()
-                    self.d.correct_successive += 1
-                    self.d.solved_problems.add(correct_answer)
+                    self.playing_status.correct_successive += 1
+                    self.playing_status.solved_problems.add(correct_answer)
                     is_solved = True
 
-                self.d.attempt_cumulative += 1
-        self.d.correct_successive_history.append(self.d.correct_successive)
+                self.playing_status.attempt_cumulative += 1
+        self.playing_status.correct_successive_history.append(
+            self.playing_status.correct_successive)
 
     def play(self):
         timer = Timer()
-        self.d.time_elapsed = timer.measure_time_execution(self.enable_loop)
+        self.playing_status.time_elapsed = timer.measure_time_execution(
+            self.enable_loop)
         self.show_end_message()
 
     def show_end_message(self) -> None:
-        s = self.d.total_problems_solved()
-        a = self.d.count()
+        s = self.playing_status.total_problems_solved()
+        a = self.playing_status.count()
 
-        m = self.d.mistakes_count
+        m = self.playing_status.mistakes_count
 
-        t = Timer.display_time_elapsed(self.d.time_elapsed)
-        c = self.d.max_correct_successive()
+        t = Timer.display_time_elapsed(self.playing_status.time_elapsed)
+        c = self.playing_status.max_correct_successive()
 
-        print(f"You solved all! Here's the summery:")
+        print(f"You solved all! Here's the summary:")
         print(f"  Total problems solved              {s} / {a}")
         print(f"  Total mistakes made                {m}")
         print(f"  Maximum successive correct answer  {c}")
         print(f"  Total time spent                   {t}")
 
     def say_compliment(self) -> None:
-        a = self.d.correct_successive
+        a = self.playing_status.correct_successive
         if a < 1:
             print("Good guess!")
             return
@@ -212,22 +269,32 @@ class Play:
     def show_correct_answer(self, correct_answer: int) -> None:
         print(f"The answer: {correct_answer}")
 
+    def finalize_app(self):
+        pass
+
 
 class Validator():
+    def __init__(self, validator) -> None:
+        self.validator = validator
+    pass
+
+
+class InplayingValidator:
     """
     A set of validations to be enabled in playing games.
     """
 
-    def __init__(self, data: PlayData) -> None:
+    def __init__(self, data: PlayingStatus, config: Config) -> None:
         self.d = data
+        self.config = config
 
     def is_valid(self, input_str: str) -> bool:
         if not self.__is_digit(input_str):
             print("Please enter a number")
             return False
         if not self.__is_in_range(input_str):
-            p = self.d.coordinates[Game.START_INDEX]
-            q = self.d.coordinates[Game.END_INDEX]
+            p = self.d.coordinates.start
+            q = self.d.coordinates.end
             print(f"The value must be within a value from {p} to {q}")
             return False
 
@@ -237,51 +304,39 @@ class Validator():
         return v.isdigit()
 
     def __is_in_range(self, v: str):
-        return Game.MIN_NUMBER <= int(v) <= Game.MAX_NUMBER
+        return self.config.MIN_NUMBER <= int(v) <= self.config.MAX_NUMBER
 
 
-class ProblemSetMakerValidator(Validator):
+class ProblemSetMakerValidator:
     """
     A set of validations needed to generate flawless problem sets.
     """
 
-    def __init__(self) -> None:
-        pass
+    def __init__(self, coordinates: Interval, config: Config) -> None:
+        self.coordinates = coordinates
+        self.config = config
 
-    def is_valid(self, split_values: RawInputInterval) -> bool:
-        if not self.__is_digit_all(split_values):
-            print("Please enter a number")
-            return False
-        elif not self.__is_pair(split_values):
-            return False
-        elif not self.__is_in_range(split_values):
+    def is_valid(self) -> bool:
+        if not self.__is_in_range():
             print(
                 f"Both start and end must be within a value from "
-                f"{Game.MIN_NUMBER} to {Game.MAX_NUMBER}"
+                f"{self.config.MIN_NUMBER} to {self.config.MAX_NUMBER}"
             )
             return False
-        elif not self.__is_in_range2(split_values):
+        elif not self.__is_in_range2():
             print("Start must be less than or equal to end")
             return False
+
         return True
 
-    def __is_pair(self, v: RawInputInterval) -> bool:
-        range_pair = self.__make_range_pair(v)
-        return len(range_pair) == 2
+    def __is_in_range(self) -> bool:
+        return (
+            self.config.MIN_NUMBER <= self.coordinates.start <= self.config.MAX_NUMBER and
+            self.config.MIN_NUMBER <= self.coordinates.end <= self.config.MAX_NUMBER
+        )
 
-    def __is_digit_all(self, v: RawInputInterval) -> bool:
-        return all([v.isdigit() for v in v])
-
-    def __is_in_range(self, v: RawInputInterval) -> bool:
-        start, end = self.__make_range_pair(v)
-        return (Game.MIN_NUMBER <= start <= Game.MAX_NUMBER and Game.MIN_NUMBER <= end <= Game.MAX_NUMBER)
-
-    def __is_in_range2(self, v: RawInputInterval) -> bool:
-        start, end = self.__make_range_pair(v)
-        return start < end
-
-    def __make_range_pair(self, v: RawInputInterval) -> OpenedInterval:
-        return tuple(map(int, v))
+    def __is_in_range2(self) -> bool:
+        return self.coordinates.start < self.coordinates.end
 
 
 class ProblemSetMaker():
@@ -294,8 +349,7 @@ class ProblemSetMaker():
         self.problem_set = []
 
     def __prepare_problem_set(self, coordinates: OpenedInterval) -> Self:
-        start, end = coordinates
-        self.problem_set = list(range(start, end))
+        self.problem_set = list(range(coordinates.start, coordinates.end))
         return self
 
     def __shuffle(self) -> Self:
@@ -313,16 +367,16 @@ class ProblemSetMaker():
 
 
 if __name__ == "__main__":
-    g = Game()
+    config = Config()
+    game = Game(config)
 
-    coordinates: HalfOpenedInterval = tuple(int(x) for x in g.get_range())
-    coordinates_new = g.make_range_pair(coordinates)
-    data = PlayData(coordinates=coordinates_new)
+    coordinates = game.get_range()
+    playing_status = PlayingStatus(coordinates)
 
-    ps = ProblemSetMaker(data.coordinates)
+    ps = ProblemSetMaker(coordinates)
     queue = ps.get_queue()
 
-    p = Play(queue, data)
+    p = Play(queue, playing_status, config)
     p.play()
 
     exit(0)
