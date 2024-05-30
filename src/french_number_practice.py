@@ -56,7 +56,7 @@ class HalfOpenedInterval(Interval):
         return OpenedInterval(self.start, self.end + 1)
 
 
-def validate_range(test_string: str, coordinates: OpenedInterval):
+def test_in_range(test_string: str, coordinates: OpenedInterval):
     if coordinates.start <= int(test_string) <= coordinates.end:
         return
     raise ValueError("The value must be within a value from {0:d} to {1:d}".format(
@@ -70,6 +70,24 @@ def try_int_conversion(test_string: str):
         int(test_string)
     except ValueError:
         raise ValueError("Please enter a number")
+
+
+def test_in_range_on_preparation(coordinates: Interval, config: Config):
+    if (
+        config.MIN_NUMBER <= coordinates.start <= config.MAX_NUMBER and
+        config.MIN_NUMBER <= coordinates.end <= config.MAX_NUMBER
+    ):
+        return
+    raise ValueError("Both start and end must be within a value from {0:d} to {1:d}".format(
+        config.MIN_NUMBER,
+        config.MAX_NUMBER
+    ))
+
+
+def test_correct_order(coordinates: Interval):
+    if coordinates.start < coordinates.end:
+        return
+    raise ValueError("Start must be less than or equal to end")
 
 
 class TimerResult:
@@ -174,14 +192,13 @@ class InplayingValidator:
     A set of validations to be enabled in playing games.
     """
 
-    def __init__(self, config: Config, *user_functions) -> None:
-        self.config = config
+    def __init__(self, *user_functions) -> None:
         self.user_functions = user_functions
 
     def is_valid(self, input_str: str):
         try:
             for user_func in self.user_functions:
-                user_func(input_str)
+                user_func(test_string=input_str)
         except ValueError as e:
             print(e)
             return False
@@ -193,27 +210,17 @@ class ProblemSetMakerValidator:
     A set of validations needed to generate flawless problem sets.
     """
 
-    def __init__(self, coordinates: Interval, config: Config) -> None:
-        self.coordinates = coordinates
-        self.config = config
+    def __init__(self, *user_functions) -> None:
+        self.user_functions = user_functions
 
-    def is_valid(self):
-        if not self.__is_in_range():
-            raise ValueError("Both start and end must be within a value from {0:d} to {1:d}".format(
-                self.config.MIN_NUMBER,
-                self.config.MAX_NUMBER
-            ))
-        elif not self.__is_in_range2():
-            raise ValueError("Start must be less than or equal to end")
-
-    def __is_in_range(self) -> bool:
-        return (
-            self.config.MIN_NUMBER <= self.coordinates.start <= self.config.MAX_NUMBER and
-            self.config.MIN_NUMBER <= self.coordinates.end <= self.config.MAX_NUMBER
-        )
-
-    def __is_in_range2(self) -> bool:
-        return self.coordinates.start < self.coordinates.end
+    def is_valid(self, coordinates: Interval):
+        try:
+            for user_func in self.user_functions:
+                user_func(coordinates=coordinates)
+        except ValueError as e:
+            print(e)
+            return False
+        return True
 
 
 class Card:
@@ -357,10 +364,8 @@ class Game:
                     raise ValueError(
                         "Two numbers must be entered, separated by a space."
                     )
-
                 for try_string in split_values:
                     try_int_conversion(try_string)
-
             except ValueError as e:
                 print(e)
                 continue
@@ -369,18 +374,15 @@ class Game:
             coordinates_half_open = HalfOpenedInterval(start, end)
 
             try:
-                Validator(
-                    ProblemSetMakerValidator(
-                        coordinates_half_open,
-                        self.config
-                    )
-                ).validator.is_valid()
-
+                validated = ProblemSetMakerValidator(
+                    functools.partial(
+                        test_in_range_on_preparation,
+                        config=self.config
+                    ),
+                    test_correct_order,
+                ).is_valid(coordinates_half_open)
             except ValueError as e:
                 print(e)
-                continue
-
-            validated = True
 
         coordinates = coordinates_half_open.limit_bottom(
             self.config.MIN_NUMBER
@@ -397,14 +399,10 @@ class Game:
             self.config
         ).get_queue()
 
-        validator = Validator(
-            InplayingValidator(
-                self.config,
-                try_int_conversion,
-                # validate_range_partial()
-                functools.partial(validate_range, coordinates=coordinates)
-            )
-        ).validator
+        validator = InplayingValidator(
+            try_int_conversion,
+            functools.partial(test_in_range, coordinates=coordinates)
+        )
 
         p = Play(
             queue,
