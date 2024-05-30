@@ -1,11 +1,12 @@
 #!/usr/bin/env python3.13
 
 from collections import deque
-from random import shuffle
-from sys import exit
-from time import time
 from typing import Self
-from num2words import num2words
+import functools
+import random
+import sys
+import time
+import num2words
 
 
 class Config:
@@ -55,15 +56,13 @@ class HalfOpenedInterval(Interval):
         return OpenedInterval(self.start, self.end + 1)
 
 
-def validate_range_partial(coordinates: OpenedInterval):
-    def validate_range(test_string: str):
-        if coordinates.start <= int(test_string) <= coordinates.end:
-            return
-        raise ValueError("The value must be within a value from {0:d} to {1:d}".format(
-            coordinates.start,
-            coordinates.end
-        ))
-    return validate_range
+def validate_range(test_string: str, coordinates: OpenedInterval):
+    if coordinates.start <= int(test_string) <= coordinates.end:
+        return
+    raise ValueError("The value must be within a value from {0:d} to {1:d}".format(
+        coordinates.start,
+        coordinates.end
+    ))
 
 
 def try_int_conversion(test_string: str):
@@ -93,11 +92,11 @@ class Timer:
         self.started_seconds = 0.0
 
     def start(self) -> Self:
-        self.started_seconds = time()
+        self.started_seconds = time.time()
         return self
 
     def stop(self) -> Self:
-        self.elapsed_seconds = time() - self.started_seconds
+        self.elapsed_seconds = time.time() - self.started_seconds
         return self
 
     def execute(self, user_function) -> Self:
@@ -254,11 +253,11 @@ class ProblemBuilderFrench(ProblemBuilder):
 
         for n in range(self.coordinates.start, self.coordinates.end):
             self.problem_set.append(NumberFrenchCard(
-                num2words(n, lang=self.config.LANGUAGE),
+                num2words.num2words(n, lang=self.config.LANGUAGE),
                 str(n),
             ))
 
-        shuffle(self.problem_set)
+        random.shuffle(self.problem_set)
         return deque(self.problem_set)
 
 
@@ -349,7 +348,7 @@ class Game:
                 input_str = input("Input the range [from, to]: ")
             except (KeyboardInterrupt, EOFError) as e:
                 print(e)
-                exit(1)
+                sys.exit(1)
 
             split_values = input_str.split()
 
@@ -402,7 +401,8 @@ class Game:
             InplayingValidator(
                 self.config,
                 try_int_conversion,
-                validate_range_partial(coordinates)
+                # validate_range_partial()
+                functools.partial(validate_range, coordinates=coordinates)
             )
         ).validator
 
