@@ -18,6 +18,8 @@ class Config:
 
 class Interval:
     def __init__(self, start: int, end: int) -> None:
+        if end < start:
+            raise ValueError("Start must be less than or equal to end")
         self.start = start
         self.end = end
 
@@ -46,23 +48,16 @@ class Interval:
         return self
 
 
-class OpenedInterval(Interval):
-    def to_half_opened_interval(self):
-        return HalfOpenedInterval(self.start, self.end - 1)
-
-
 class HalfOpenedInterval(Interval):
+    # for like range() function
     def to_opened_interval(self):
-        return OpenedInterval(self.start, self.end + 1)
+        return HalfOpenedInterval(self.start, self.end + 1)
 
+    def is_in_range(self, x: int) -> bool:
+        return self.start <= x < self.end
 
-def test_in_range(test_string: str, coordinates: OpenedInterval):
-    if coordinates.start <= int(test_string) <= coordinates.end:
-        return
-    raise ValueError("The value must be within a value from {0:d} to {1:d}".format(
-        coordinates.start,
-        coordinates.end
-    ))
+    def is_in_range_as_opened(self, x: int) -> bool:
+        return self.start <= x <= self.end
 
 
 def try_int_conversion(test_string: str):
@@ -82,12 +77,6 @@ def test_in_range_on_preparation(coordinates: Interval, config: Config):
         config.MIN_NUMBER,
         config.MAX_NUMBER
     ))
-
-
-def test_correct_order(coordinates: Interval):
-    if coordinates.start < coordinates.end:
-        return
-    raise ValueError("Start must be less than or equal to end")
 
 
 class TimerResult:
@@ -187,25 +176,32 @@ class Validator:
         self.validator = validator
 
 
-class InplayingValidator:
+class InplayingFrenchValidator:
     """
     A set of validations to be enabled in playing games.
     """
 
-    def __init__(self, *user_functions) -> None:
+    def __init__(self, coordinates: HalfOpenedInterval, *user_functions) -> None:
         self.user_functions = user_functions
+        self.coordinates = coordinates
 
     def is_valid(self, input_str: str):
         try:
             for user_func in self.user_functions:
                 user_func(test_string=input_str)
+            if not self.coordinates.is_in_range_as_opened(int(input_str)):
+                raise ValueError("The value must be within a value from {0:d} to {1:d}".format(
+                    self.coordinates.start,
+                    self.coordinates.end
+                ))
+
         except ValueError as e:
             print(e)
             return False
         return True
 
 
-class ProblemSetMakerValidator:
+class ProblemBuilderFrenchValidator:
     """
     A set of validations needed to generate flawless problem sets.
     """
@@ -230,7 +226,7 @@ class Card:
         self.answer = ""
 
 
-class NumberFrenchCard:
+class CardFrench:
     def __init__(self, problem: str, answer: str):
         self.problem = problem
         self.answer = answer
@@ -248,7 +244,7 @@ class ProblemBuilderFrench(ProblemBuilder):
     Generates a set of numbers.
     """
 
-    def __init__(self, coordinates: OpenedInterval, config: Config) -> None:
+    def __init__(self, coordinates: HalfOpenedInterval, config: Config) -> None:
         self.problem_set = []
         self.coordinates = coordinates
         self.config = config
@@ -259,7 +255,7 @@ class ProblemBuilderFrench(ProblemBuilder):
         """
 
         for n in range(self.coordinates.start, self.coordinates.end):
-            self.problem_set.append(NumberFrenchCard(
+            self.problem_set.append(CardFrench(
                 num2words.num2words(n, lang=self.config.LANGUAGE),
                 str(n),
             ))
@@ -268,12 +264,12 @@ class ProblemBuilderFrench(ProblemBuilder):
         return deque(self.problem_set)
 
 
-class Play:
+class Engine:
     """
     A set of primary routines.
     """
 
-    def __init__(self, queue: deque, playing_status: PlayingStatus, validator: InplayingValidator) -> None:
+    def __init__(self, queue: deque, playing_status: PlayingStatus, validator: InplayingFrenchValidator) -> None:
         self.queue = queue
         self.playing_status = playing_status
         self.validator = validator
@@ -283,7 +279,7 @@ class Play:
             card = self.queue.pop()
             is_solved = False
 
-            assert (isinstance(card, NumberFrenchCard))
+            assert (isinstance(card, CardFrench))
 
             while not is_solved:
                 display = card.problem
@@ -338,7 +334,7 @@ class Game:
     def __init__(self, config: Config) -> None:
         self.config = config
 
-    def get_cordinates_input(self) -> OpenedInterval:
+    def get_cordinates_input(self) -> HalfOpenedInterval:
         """
         Defines a range by a user input.
         """
@@ -371,15 +367,14 @@ class Game:
                 continue
 
             start, end = [int(x) for x in split_values]
-            coordinates_half_open = HalfOpenedInterval(start, end)
 
             try:
-                validated = ProblemSetMakerValidator(
+                coordinates_half_open = HalfOpenedInterval(start, end)
+                validated = ProblemBuilderFrenchValidator(
                     functools.partial(
                         test_in_range_on_preparation,
                         config=self.config
                     ),
-                    test_correct_order,
                 ).is_valid(coordinates_half_open)
             except ValueError as e:
                 print(e)
@@ -388,23 +383,23 @@ class Game:
             self.config.MIN_NUMBER
         ).limit_top(
             self.config.MAX_NUMBER
-        ).to_opened_interval()
+        )
 
         return coordinates
 
     def play(self) -> None:
         coordinates = self.get_cordinates_input()
         queue = ProblemBuilderFrench(
-            coordinates,
+            coordinates.to_opened_interval(),
             self.config
         ).get_queue()
 
-        validator = InplayingValidator(
+        validator = InplayingFrenchValidator(
+            coordinates,
             try_int_conversion,
-            functools.partial(test_in_range, coordinates=coordinates)
         )
 
-        p = Play(
+        p = Engine(
             queue,
             PlayingStatus(
                 queue,

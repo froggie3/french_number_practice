@@ -29,7 +29,7 @@ class TestValidator(unittest.TestCase):
 class TestProblemSetMakerValidator(unittest.TestCase):
 
     def test_pair(self):
-        v = ProblemSetMakerValidator()
+        v = ProblemBuilderFrenchValidator()
         tests = (
             ["0"],
             ["1", "2", "3"],
@@ -40,7 +40,7 @@ class TestProblemSetMakerValidator(unittest.TestCase):
             ),
 
     def test_is_digit_all(self):
-        v = ProblemSetMakerValidator()
+        v = ProblemBuilderFrenchValidator()
         tests = (
             ["a", "b"],
             ["0", "-1"],
@@ -53,7 +53,7 @@ class TestProblemSetMakerValidator(unittest.TestCase):
             )
 
     def test_is_in_range(self):
-        v = ProblemSetMakerValidator()
+        v = ProblemBuilderFrenchValidator()
         tests = (
             ["0", "99999"],
         )
@@ -63,7 +63,7 @@ class TestProblemSetMakerValidator(unittest.TestCase):
             ),
 
     def test_is_in_range2(self):
-        v = ProblemSetMakerValidator()
+        v = ProblemBuilderFrenchValidator()
         tests = (
             ["99999", "0"],
         )
@@ -73,7 +73,7 @@ class TestProblemSetMakerValidator(unittest.TestCase):
             ),
 
     def test_make_range_pair(self):
-        v = ProblemSetMakerValidator()
+        v = ProblemBuilderFrenchValidator()
         tests = (
             (["33", "66"], (33, 66)),
         )
