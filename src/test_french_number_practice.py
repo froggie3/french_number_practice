@@ -105,7 +105,7 @@ class TestProblemSetMaker(unittest.TestCase):
             ((20, 31), 11),
         )
         for test in tests:
-            a = ProblemSetMaker(test)
+            a = ProblemBuilderFrench(test)
             a._ProblemSetMaker__prepare_problem_set(test[0])
             self.assertEqual(len(a.problem_set), test[1])
 
@@ -114,7 +114,7 @@ class TestProblemSetMaker(unittest.TestCase):
             (20, 40),
         )
         for test in tests:
-            a = ProblemSetMaker(test)
+            a = ProblemBuilderFrench(test)
             self.assertEqual(
                 str(type(a.get_queue())),
                 "<class 'collections.deque'>"
@@ -126,7 +126,7 @@ class TestProblemSetMaker(unittest.TestCase):
         )
         # is properly shuffled?
         for test in tests:
-            a = ProblemSetMaker(test)
+            a = ProblemBuilderFrench(test)
             q = list(a.get_queue())
             ok = False
             for i in range(test[1] - test[0]):

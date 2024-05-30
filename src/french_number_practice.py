@@ -5,7 +5,6 @@ from random import shuffle
 from sys import exit
 from time import time
 from typing import Self
-
 from num2words import num2words
 
 
@@ -17,7 +16,6 @@ class Config:
 
 
 class Interval:
-
     def __init__(self, start: int, end: int) -> None:
         self.start = start
         self.end = end
@@ -55,6 +53,24 @@ class OpenedInterval(Interval):
 class HalfOpenedInterval(Interval):
     def to_opened_interval(self):
         return OpenedInterval(self.start, self.end + 1)
+
+
+def validate_range_partial(coordinates: OpenedInterval):
+    def validate_range(test_string: str):
+        if coordinates.start <= int(test_string) <= coordinates.end:
+            return
+        raise ValueError("The value must be within a value from {0:d} to {1:d}".format(
+            coordinates.start,
+            coordinates.end
+        ))
+    return validate_range
+
+
+def try_int_conversion(test_string: str):
+    try:
+        int(test_string)
+    except ValueError:
+        raise ValueError("Please enter a number")
 
 
 class TimerResult:
@@ -95,43 +111,50 @@ class Timer:
 class PlayingStatus:
     """
     A class that holds something related to playing status.
-    ステートレスにしたい！
     """
 
-    def __init__(self, coordinates: OpenedInterval, timer: Timer) -> None:
-        self.attempt_cumulative = 0
-        self.correct_successive = 0
-        self.correct_successive_history = []
+    def __init__(self, queue, timer: Timer) -> None:
+        self.attempts_count = 0
+        self.correct_successive_count = 0
+        self.correct_successive_count_max = 0
         self.mistakes_count = 0
-        self.solved_problems = set()
-        self.time_elapsed = 10e9
-        self.time_started = 0
-        self.coordinates = coordinates
+        self.queue_length = len(queue)
         self.timer = timer
         self.timer_result = TimerResult(0.0)
 
-    def count(self) -> int:
-        """
-        Counts the number of problem to be solved.
-        """
-        return self.coordinates.end - self.coordinates.start
+    def __solved(self):
+        self.attempts_count += 1
+        self.correct_successive_count_max = max(
+            self.correct_successive_count_max, self.correct_successive_count
+        )
+
+    def correct(self):
+        """Process on correct answer"""
+        self.correct_successive_count += 1
+        self.__solved()
+
+    def wrong(self):
+        """Process on wrong answer"""
+        self.correct_successive_count = 0
+        self.mistakes_count += 1
+        self.__solved()
 
     def show_end_message(self) -> None:
         lines = [
-            "{0:<40} {1} / {2}".format(
-                "Total problems solved",
-                len(self.solved_problems),
-                self.count()
+            "{0:<50} {1} / {2}".format(
+                "Total problems solved (actually / originally)",
+                self.attempts_count - self.mistakes_count,
+                self.queue_length
             ),
-            "{0:<40} {1}".format(
+            "{0:<50} {1}".format(
                 "Total mistakes made",
                 self.mistakes_count
             ),
-            "{0:<40} {1}".format(
+            "{0:<50} {1}".format(
                 "Maximum successive correct answer",
-                max(self.correct_successive_history)
+                self.correct_successive_count_max
             ),
-            "{0:<40} {1}".format(
+            "{0:<50} {1}".format(
                 "Total time spent",
                 self.timer_result.display_time_elapsed()
             ),
@@ -152,26 +175,17 @@ class InplayingValidator:
     A set of validations to be enabled in playing games.
     """
 
-    def __init__(self, coordinates: OpenedInterval, config: Config) -> None:
-        self.coordinates = coordinates
+    def __init__(self, config: Config, *user_functions) -> None:
         self.config = config
+        self.user_functions = user_functions
 
     def is_valid(self, input_str: str):
         try:
-            try:
-                int(input_str)
-            except ValueError:
-                raise ValueError("Please enter a number")
-
-            if not self.coordinates.start <= int(input_str) <= self.coordinates.end:
-                raise ValueError("The value must be within a value from {0:d} to {1:d}".format(
-                    self.coordinates.start,
-                    self.coordinates.end
-                ))
+            for user_func in self.user_functions:
+                user_func(input_str)
         except ValueError as e:
             print(e)
             return False
-
         return True
 
 
@@ -186,7 +200,7 @@ class ProblemSetMakerValidator:
 
     def is_valid(self):
         if not self.__is_in_range():
-            raise ValueError("Both start and end must be within a value from {0:s} to {1:s}".format(
+            raise ValueError("Both start and end must be within a value from {0:d} to {1:d}".format(
                 self.config.MIN_NUMBER,
                 self.config.MAX_NUMBER
             ))
@@ -203,31 +217,48 @@ class ProblemSetMakerValidator:
         return self.coordinates.start < self.coordinates.end
 
 
-class ProblemSetMaker():
+class Card:
+    def __init__(self):
+        self.mistakes = 0
+        self.problem = ""
+        self.answer = ""
+
+
+class NumberFrenchCard:
+    def __init__(self, problem: str, answer: str):
+        self.problem = problem
+        self.answer = answer
+
+    def __repr__(self):
+        return f"{__class__.__name__}{self.problem, self.answer}"
+
+
+class ProblemBuilder:
+    pass
+
+
+class ProblemBuilderFrench(ProblemBuilder):
     """
     Generates a set of numbers.
     """
 
-    def __init__(self, coordinates: OpenedInterval) -> None:
-        self.coordinates = coordinates
+    def __init__(self, coordinates: OpenedInterval, config: Config) -> None:
         self.problem_set = []
-
-    def __prepare_problem_set(self, coordinates: OpenedInterval) -> Self:
-        self.problem_set = list(range(coordinates.start, coordinates.end))
-        return self
-
-    def __shuffle(self) -> Self:
-        shuffle(self.problem_set)
-        return self
+        self.coordinates = coordinates
+        self.config = config
 
     def get_queue(self) -> deque:
         """
         Get a queue of sets of problem, which is shuffled.
         """
-        self.__prepare_problem_set(
-            self.coordinates
-        ).__shuffle()
 
+        for n in range(self.coordinates.start, self.coordinates.end):
+            self.problem_set.append(NumberFrenchCard(
+                num2words(n, lang=self.config.LANGUAGE),
+                str(n),
+            ))
+
+        shuffle(self.problem_set)
         return deque(self.problem_set)
 
 
@@ -236,50 +267,41 @@ class Play:
     A set of primary routines.
     """
 
-    def __init__(self, queue: deque, playing_status: PlayingStatus, validator: InplayingValidator, french_numbers: list) -> None:
+    def __init__(self, queue: deque, playing_status: PlayingStatus, validator: InplayingValidator) -> None:
         self.queue = queue
         self.playing_status = playing_status
         self.validator = validator
-        self.french_numbers = french_numbers
 
     def enable_loop(self):
         while self.queue:
-            correct_answer = self.queue.pop()
+            card = self.queue.pop()
             is_solved = False
 
+            assert (isinstance(card, NumberFrenchCard))
+
             while not is_solved:
+                display = card.problem
                 try:
-                    display = self.french_numbers[correct_answer]
                     guess = input(f"{display}: ")
-                except KeyboardInterrupt as e:
+                except (KeyboardInterrupt, EOFError) as e:
                     print(e)
-                    self.show_correct_answer(correct_answer)
+                    self.show_correct_answer(card.answer)
                     return
 
                 if guess == "quit":
-                    self.queue.appendleft(correct_answer)
-                    self.show_correct_answer(correct_answer)
+                    self.queue.appendleft(card)
+                    self.show_correct_answer(card.answer)
                     break
                 elif not self.validator.is_valid(guess):
                     continue
-                elif int(guess) != correct_answer:
+                elif guess != card.answer:
                     print("Guess again")
-                    self.queue.appendleft(correct_answer)
-                    self.playing_status.correct_successive_history.append(
-                        self.playing_status.correct_successive
-                    )
-                    self.playing_status.correct_successive = 0
-                    self.playing_status.mistakes_count += 1
+                    self.queue.appendleft(card)
+                    self.playing_status.wrong()
                 else:
                     self.say_compliment()
-                    self.playing_status.correct_successive += 1
-                    self.playing_status.solved_problems.add(correct_answer)
+                    self.playing_status.correct()
                     is_solved = True
-
-                self.playing_status.attempt_cumulative += 1
-        self.playing_status.correct_successive_history.append(
-            self.playing_status.correct_successive
-        )
 
     def play(self) -> PlayingStatus:
         self.playing_status.timer_result = self.playing_status.timer.start(
@@ -291,14 +313,14 @@ class Play:
         return self.playing_status
 
     def say_compliment(self) -> None:
-        if self.playing_status.correct_successive < 1:
+        if self.playing_status.correct_successive_count < 1:
             print("Good guess!")
             return
         print("Good guess! (consecutive good answers: {0:<d})".format(
-            self.playing_status.correct_successive
+            self.playing_status.correct_successive_count
         ))
 
-    def show_correct_answer(self, correct_answer: int) -> None:
+    def show_correct_answer(self, correct_answer: str) -> None:
         print(f"The answer: {correct_answer}")
 
 
@@ -325,7 +347,7 @@ class Game:
         while not validated:
             try:
                 input_str = input("Input the range [from, to]: ")
-            except KeyboardInterrupt as e:
+            except (KeyboardInterrupt, EOFError) as e:
                 print(e)
                 exit(1)
 
@@ -336,10 +358,10 @@ class Game:
                     raise ValueError(
                         "Two numbers must be entered, separated by a space."
                     )
-                elif not all([v.isdigit() for v in split_values]):
-                    raise ValueError(
-                        "Please enter a number"
-                    )
+
+                for try_string in split_values:
+                    try_int_conversion(try_string)
+
             except ValueError as e:
                 print(e)
                 continue
@@ -348,10 +370,12 @@ class Game:
             coordinates_half_open = HalfOpenedInterval(start, end)
 
             try:
-                Validator(ProblemSetMakerValidator(
-                    coordinates_half_open,
-                    self.config
-                )).validator.is_valid()
+                Validator(
+                    ProblemSetMakerValidator(
+                        coordinates_half_open,
+                        self.config
+                    )
+                ).validator.is_valid()
 
             except ValueError as e:
                 print(e)
@@ -367,20 +391,28 @@ class Game:
 
         return coordinates
 
-    def prepare_french_numbers(self, coodinates: OpenedInterval) -> list:
-        return [
-            num2words(i, lang=self.config.LANGUAGE)
-            for i in range(coodinates.start, coodinates.end)
-        ]
-
     def play(self) -> None:
         coordinates = self.get_cordinates_input()
+        queue = ProblemBuilderFrench(
+            coordinates,
+            self.config
+        ).get_queue()
+
+        validator = Validator(
+            InplayingValidator(
+                self.config,
+                try_int_conversion,
+                validate_range_partial(coordinates)
+            )
+        ).validator
 
         p = Play(
-            ProblemSetMaker(coordinates).get_queue(),
-            PlayingStatus(coordinates, Timer(),),
-            Validator(InplayingValidator(coordinates, self.config)).validator,
-            self.prepare_french_numbers(coordinates),
+            queue,
+            PlayingStatus(
+                queue,
+                Timer(),
+            ),
+            validator,
         )
 
         play_result = p.play()
@@ -390,5 +422,3 @@ class Game:
 if __name__ == "__main__":
     game = Game(Config())
     game.play()
-
-    exit(0)
