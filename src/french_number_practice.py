@@ -89,10 +89,10 @@ class HalfOpenedInterval(Interval):
         Check if an argument x is in the range.
 
         Args:
-            x (int): a value to be checked. 
+            x (int): a value to be checked.
 
         Returns:
-            bool: True on x is in the range, return False is it isn't.  
+            bool: True on x is in the range, return False is it isn't.
         """
         return self.start <= x < self.end
 
@@ -105,7 +105,7 @@ def try_int_conversion(test_string: str) -> None:
     Tries integer conversion from test_string.
 
     Args:
-        test_string (str): a string to be tested. 
+        test_string (str): a string to be tested.
 
     Raises:
         ValueError: the given string is no longer number.
@@ -185,7 +185,11 @@ class Timer:
 
 class PlayingStatus:
     """
-    A class that holds something related to playing status.
+    A stateful class that holds the current status of the game.
+
+    Args:
+        queue: A set of the problems.
+        timer (Timer): A timer that measures the time elapsed.
     """
 
     def __init__(self, queue, timer: Timer) -> None:
@@ -269,7 +273,7 @@ class PlayingStatusResult:
 
 class Validator:
     """
-    A validator handler. 
+    A validator handler.
     """
 
     def __init__(self, user_functions) -> None:
@@ -278,7 +282,11 @@ class Validator:
 
 class InplayingFrenchValidator(Validator):
     """
-    A set of validations to be enabled in playing games.
+    A set of validations/dependency to be used in playing games.
+
+    Args:
+        cooodinates (HalfOpenedInterval): Checks if the input value is with in this range.
+        *user_functions: Callback function(s) to be executed inside the validation process.
     """
 
     def __init__(self, coordinates: HalfOpenedInterval, *user_functions) -> None:
@@ -320,9 +328,6 @@ class ProblemBuilderFrenchValidator(Validator):
 
 
 class Card:
-    """
-    A class that represents flip card.
-    """
 
     def __init__(self, problem: str, answer: str) -> None:
         self.problem = problem
@@ -337,14 +342,21 @@ class Card:
 
 
 class CardFrench(Card):
+    """
+    A class that represents a piece of flip card.
+
+    Args:
+        problem (str): A player sees this first, and then guesses the answer for this.
+        answer (str): A player needs to answer this.
+    """
+
     def __init__(self, problem: str, answer: str) -> None:
         super().__init__(problem, answer)
 
 
 class ProblemBuilder:
-    def __init__(self, config: FrenchNumberPracticeConfig) -> None:
+    def __init__(self, config: Config) -> None:
         self.problem_set = []
-        self.config = config
 
     def get_queue(self) -> None:
         raise NotImplementedError("Subclasses should implement this!")
@@ -352,12 +364,16 @@ class ProblemBuilder:
 
 class ProblemBuilderFrench(ProblemBuilder):
     """
-    Generates a set of numbers.
+    Generates a pair of numbers represented in French and arabic numerals.
+
+    Args:
+        coordinates: Generates numbers (problems) within this range.
     """
 
     def __init__(self, coordinates: HalfOpenedInterval, config: FrenchNumberPracticeConfig) -> None:
         super().__init__(config)
         self.coordinates = coordinates
+        self.config = config
 
     def get_queue(self) -> deque:
         """
