@@ -1,19 +1,37 @@
-#!/usr/bin/env python3.13
+#!/usr/bin/env python3
 
+from __future__ import annotations
 from collections import deque
-from typing import Self
+
 import functools
+import logging
 import random
 import sys
 import time
+import argparse
+
 import num2words
 
 
 class Config:
     def __init__(self) -> None:
+        pass
+
+
+class FrenchNumberPracticeConfig(Config):
+    def __init__(self) -> None:
+        super().__init__()
         self.MIN_NUMBER = 0
         self.MAX_NUMBER = 100
         self.LANGUAGE = "fr"
+
+    def __repr__(self) -> str:
+        repr_text = (
+            f"{self.MIN_NUMBER=}",
+            f"{self.MAX_NUMBER=}",
+            f"{self.LANGUAGE=}",
+        )
+        return f"{self.__class__.__name__}{repr_text}"
 
 
 class Interval:
@@ -23,7 +41,14 @@ class Interval:
         self.start = start
         self.end = end
 
-    def limit_bottom(self, x: int) -> Self:
+    def __repr__(self) -> str:
+        repr_text = (
+            f"{self.start=}",
+            f"{self.end=}",
+        )
+        return f"{__class__.__name__}{repr_text}"
+
+    def limit_bottom(self, x: int) -> Interval:
         """
         limit the start value to x.
            ~~~~~~
@@ -35,9 +60,9 @@ class Interval:
         self.start = max(self.start, x)
         return self
 
-    def limit_top(self, x: int) -> Self:
+    def limit_top(self, x: int) -> Interval:
         """
-        limit the end value to x.
+        Limit the end value to x.
               ___
              /^------ x
             /
@@ -49,25 +74,49 @@ class Interval:
 
 
 class HalfOpenedInterval(Interval):
-    # for like range() function
+    def __init__(self, start: int, end: int) -> None:
+        super().__init__(start, end)
+
     def to_opened_interval(self):
+        """
+        Returns range() function friendly interval. For instance it
+        treats [s, t) as if it were [s, t].
+        """
         return HalfOpenedInterval(self.start, self.end + 1)
 
     def is_in_range(self, x: int) -> bool:
+        """
+        Check if an argument x is in the range.
+
+        Args:
+            x (int): a value to be checked. 
+
+        Returns:
+            bool: True on x is in the range, return False is it isn't.  
+        """
         return self.start <= x < self.end
 
     def is_in_range_as_opened(self, x: int) -> bool:
         return self.start <= x <= self.end
 
 
-def try_int_conversion(test_string: str):
+def try_int_conversion(test_string: str) -> None:
+    """
+    Tries integer conversion from test_string.
+
+    Args:
+        test_string (str): a string to be tested. 
+
+    Raises:
+        ValueError: the given string is no longer number.
+    """
     try:
         int(test_string)
     except ValueError:
         raise ValueError("Please enter a number")
 
 
-def test_in_range_on_preparation(coordinates: Interval, config: Config):
+def test_in_range_on_preparation(coordinates: Interval, config: FrenchNumberPracticeConfig) -> None:
     if (
         config.MIN_NUMBER <= coordinates.start <= config.MAX_NUMBER and
         config.MIN_NUMBER <= coordinates.end <= config.MAX_NUMBER
@@ -80,10 +129,17 @@ def test_in_range_on_preparation(coordinates: Interval, config: Config):
 
 
 class TimerResult:
+    """
+    A dedicated class to store / show the time taken
+    """
+
     def __init__(self, seconds: float) -> None:
         self.seconds = seconds
 
-    def display_time_elapsed(self):
+    def __repr__(self) -> str:
+        return f'{self.__class__.__name__}("{self.express()}")'
+
+    def express(self) -> str:
         minutes, remainder = divmod(self.seconds, 60)
         seconds = round(remainder, 3)
         return "{:02d}:{:06.3f}".format(int(minutes), seconds)
@@ -98,15 +154,28 @@ class Timer:
         self.elapsed_seconds = 0.0
         self.started_seconds = 0.0
 
-    def start(self) -> Self:
+    def __repr__(self):
+        self._current_elapsed()
+        repr_text = (
+            f"{self.elapsed_seconds=}",
+            f"{self.started_seconds=}",
+            f"{self.elapsed_seconds=}",
+        )
+        return f"{self.__class__.__name__}{repr_text}"
+
+    def _current_elapsed(self) -> float:
+        self.elapsed_seconds = time.time() - self.started_seconds
+        return self.elapsed_seconds
+
+    def start(self) -> Timer:
         self.started_seconds = time.time()
         return self
 
-    def stop(self) -> Self:
-        self.elapsed_seconds = time.time() - self.started_seconds
+    def stop(self) -> Timer:
+        self._current_elapsed()
         return self
 
-    def execute(self, user_function) -> Self:
+    def execute(self, user_function) -> Timer:
         user_function()
         return self
 
@@ -126,7 +195,17 @@ class PlayingStatus:
         self.mistakes_count = 0
         self.queue_length = len(queue)
         self.timer = timer
-        self.timer_result = TimerResult(0.0)
+
+    def __repr__(self) -> str:
+        repr_text = (
+            f"{self.attempts_count=}",
+            f"{self.correct_successive_count=}",
+            f"{self.correct_successive_count_max=}",
+            f"{self.mistakes_count=}",
+            f"{self.queue_length=}",
+            f"{self.timer=}",
+        )
+        return f"{__class__.__name__}{repr_text}"
 
     def __solved(self):
         self.attempts_count += 1
@@ -134,35 +213,52 @@ class PlayingStatus:
             self.correct_successive_count_max, self.correct_successive_count
         )
 
-    def correct(self):
-        """Process on correct answer"""
+    def correct(self) -> None:
+        """
+        Process on correct answer
+        """
         self.correct_successive_count += 1
         self.__solved()
 
-    def wrong(self):
-        """Process on wrong answer"""
+    def wrong(self) -> None:
+        """
+        Process on wrong answer
+        """
         self.correct_successive_count = 0
         self.mistakes_count += 1
         self.__solved()
 
+    def freeze_with_finished_time(self, timer_result: TimerResult) -> PlayingStatusResult:
+        return PlayingStatusResult(self, timer_result)
+
+
+class PlayingStatusResult:
+
+    def __init__(self, playing_status: PlayingStatus, timer_result: TimerResult) -> None:
+        self.playing_status = playing_status
+        self.timer_result = timer_result
+
+    def __repr__(self) -> str:
+        return f"{__class__.__name__}({self.playing_status}, {self.timer_result=})"
+
     def show_end_message(self) -> None:
         lines = [
             "{0:<50} {1} / {2}".format(
-                "Total problems solved (actually / originally)",
-                self.attempts_count - self.mistakes_count,
-                self.queue_length
+                "Total problems solved (actual / original)",
+                self.playing_status.attempts_count - self.playing_status.mistakes_count,
+                self.playing_status.queue_length
             ),
             "{0:<50} {1}".format(
                 "Total mistakes made",
-                self.mistakes_count
+                self.playing_status.mistakes_count
             ),
             "{0:<50} {1}".format(
                 "Maximum successive correct answer",
-                self.correct_successive_count_max
+                self.playing_status.correct_successive_count_max
             ),
             "{0:<50} {1}".format(
                 "Total time spent",
-                self.timer_result.display_time_elapsed()
+                self.timer_result.express()
             ),
         ]
 
@@ -172,20 +268,24 @@ class PlayingStatus:
 
 
 class Validator:
-    def __init__(self, validator) -> None:
-        self.validator = validator
+    """
+    A validator handler. 
+    """
+
+    def __init__(self, user_functions) -> None:
+        self.user_functions = user_functions
 
 
-class InplayingFrenchValidator:
+class InplayingFrenchValidator(Validator):
     """
     A set of validations to be enabled in playing games.
     """
 
     def __init__(self, coordinates: HalfOpenedInterval, *user_functions) -> None:
-        self.user_functions = user_functions
+        super().__init__(user_functions)
         self.coordinates = coordinates
 
-    def is_valid(self, input_str: str):
+    def is_valid(self, input_str: str) -> bool:
         try:
             for user_func in self.user_functions:
                 user_func(test_string=input_str)
@@ -196,47 +296,58 @@ class InplayingFrenchValidator:
                 ))
 
         except ValueError as e:
-            print(e)
+            logger.error(e)
             return False
         return True
 
 
-class ProblemBuilderFrenchValidator:
+class ProblemBuilderFrenchValidator(Validator):
     """
     A set of validations needed to generate flawless problem sets.
     """
 
     def __init__(self, *user_functions) -> None:
-        self.user_functions = user_functions
+        super().__init__(user_functions)
 
-    def is_valid(self, coordinates: Interval):
+    def is_valid(self, coordinates: Interval) -> bool:
         try:
             for user_func in self.user_functions:
                 user_func(coordinates=coordinates)
         except ValueError as e:
-            print(e)
+            logger.error(e)
             return False
         return True
 
 
 class Card:
-    def __init__(self):
-        self.mistakes = 0
-        self.problem = ""
-        self.answer = ""
+    """
+    A class that represents flip card.
+    """
 
-
-class CardFrench:
-    def __init__(self, problem: str, answer: str):
+    def __init__(self, problem: str, answer: str) -> None:
         self.problem = problem
         self.answer = answer
 
-    def __repr__(self):
-        return f"{__class__.__name__}{self.problem, self.answer}"
+    def __repr__(self) -> str:
+        repr_text = (
+            f"{self.problem}",
+            f"{self.answer}"
+        )
+        return f"{__class__.__name__}{repr_text}"
+
+
+class CardFrench(Card):
+    def __init__(self, problem: str, answer: str) -> None:
+        super().__init__(problem, answer)
 
 
 class ProblemBuilder:
-    pass
+    def __init__(self, config: FrenchNumberPracticeConfig) -> None:
+        self.problem_set = []
+        self.config = config
+
+    def get_queue(self) -> None:
+        raise NotImplementedError("Subclasses should implement this!")
 
 
 class ProblemBuilderFrench(ProblemBuilder):
@@ -244,10 +355,9 @@ class ProblemBuilderFrench(ProblemBuilder):
     Generates a set of numbers.
     """
 
-    def __init__(self, coordinates: HalfOpenedInterval, config: Config) -> None:
-        self.problem_set = []
+    def __init__(self, coordinates: HalfOpenedInterval, config: FrenchNumberPracticeConfig) -> None:
+        super().__init__(config)
         self.coordinates = coordinates
-        self.config = config
 
     def get_queue(self) -> deque:
         """
@@ -274,7 +384,7 @@ class Engine:
         self.playing_status = playing_status
         self.validator = validator
 
-    def enable_loop(self):
+    def enable_loop(self) -> None:
         while self.queue:
             card = self.queue.pop()
             is_solved = False
@@ -286,7 +396,7 @@ class Engine:
                 try:
                     guess = input(f"{display}: ")
                 except (KeyboardInterrupt, EOFError) as e:
-                    print(e)
+                    logger.error(e)
                     self.show_correct_answer(card.answer)
                     return
 
@@ -305,16 +415,16 @@ class Engine:
                     self.playing_status.correct()
                     is_solved = True
 
-    def play(self) -> PlayingStatus:
-        self.playing_status.timer_result = self.playing_status.timer.start(
+    def play_then_retrieve_result(self) -> PlayingStatusResult:
+        timer_result = self.playing_status.timer.start(
         ).execute(
             self.enable_loop
         ).stop(
         ).retrieve_result()
-
-        return self.playing_status
+        return self.playing_status.freeze_with_finished_time(timer_result)
 
     def say_compliment(self) -> None:
+        logger.debug(self.playing_status)
         if self.playing_status.correct_successive_count < 1:
             print("Good guess!")
             return
@@ -331,17 +441,17 @@ class Game:
     A collections of general methods and settings.
     """
 
-    def __init__(self, config: Config) -> None:
+    def __init__(self, config: FrenchNumberPracticeConfig) -> None:
         self.config = config
+        logger.debug(config)
 
     def get_cordinates_input(self) -> HalfOpenedInterval:
         """
         Defines a range by a user input.
         """
-        print(
-            "Specify the two values for the start and end of the range; \n"
-            "The values must be separated by a space:"
-        )
+        print("Specify the two values for the start and end of the "
+              "range.")
+        print("The values must be separated by a space:")
 
         validated = False
         coordinates_half_open = HalfOpenedInterval(-1, -1)
@@ -350,7 +460,7 @@ class Game:
             try:
                 input_str = input("Input the range [from, to]: ")
             except (KeyboardInterrupt, EOFError) as e:
-                print(e)
+                logger.error(e)
                 sys.exit(1)
 
             split_values = input_str.split()
@@ -363,7 +473,7 @@ class Game:
                 for try_string in split_values:
                     try_int_conversion(try_string)
             except ValueError as e:
-                print(e)
+                logger.error(e)
                 continue
 
             start, end = [int(x) for x in split_values]
@@ -377,7 +487,7 @@ class Game:
                     ),
                 ).is_valid(coordinates_half_open)
             except ValueError as e:
-                print(e)
+                logger.error(e)
 
         coordinates = coordinates_half_open.limit_bottom(
             self.config.MIN_NUMBER
@@ -385,10 +495,12 @@ class Game:
             self.config.MAX_NUMBER
         )
 
-        return coordinates
+        return HalfOpenedInterval(coordinates.start, coordinates.end)
 
     def play(self) -> None:
         coordinates = self.get_cordinates_input()
+        logger.debug(coordinates)
+
         queue = ProblemBuilderFrench(
             coordinates.to_opened_interval(),
             self.config
@@ -408,10 +520,37 @@ class Game:
             validator,
         )
 
-        play_result = p.play()
+        play_result = p.play_then_retrieve_result()
+        logger.debug(play_result)
         play_result.show_end_message()
 
 
+def get_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "-v", "--verbose",
+        help="play the game with debug messages enabled",
+        action="store_true"
+    )
+    return parser.parse_args()
+
+
+def get_logger() -> logging.Logger:
+    logger = logging.getLogger(__name__)
+    if args.verbose:
+        logger.setLevel(logging.DEBUG)
+    handler = logging.StreamHandler()
+    handler.setFormatter(fmt=logging.Formatter(
+        "{levelname:s}: {asctime:s}.{msecs:.0f} - {message}",
+        '%Y-%d-%m %H:%M:%S',
+        "{"
+    ))
+    logger.addHandler(handler)
+    return logger
+
+
 if __name__ == "__main__":
-    game = Game(Config())
+    args = get_args()
+    logger = get_logger()
+    game = Game(FrenchNumberPracticeConfig())
     game.play()
