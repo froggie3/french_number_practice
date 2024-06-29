@@ -3,10 +3,13 @@
 from __future__ import annotations
 from collections import deque
 
+import atexit
 import functools
 import logging
 import random
+import readline
 import sys
+import os
 import time
 import argparse
 
@@ -566,6 +569,14 @@ def get_logger() -> logging.Logger:
 
 
 if __name__ == "__main__":
+    histfile = os.path.join(os.path.expanduser("~"), ".python_history")
+    try:
+        readline.read_history_file(histfile)
+        # default history len is -1 (infinite), which may grow unruly
+        readline.set_history_length(1000)
+    except FileNotFoundError:
+        pass
+    atexit.register(readline.write_history_file, histfile)
     args = get_args()
     logger = get_logger()
     game = Game(FrenchNumberPracticeConfig())
