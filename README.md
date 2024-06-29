@@ -4,9 +4,16 @@ This app helps you get comfortable with french numbers in range from 0 to 100.
 
 ## How to install
 
+Local install:
+
 ```shell
-source .venv/bin/activate
-pip install -r requirements.txt
+poetry install
+```
+
+Using container:
+
+```
+docker-compose build && docker-compose run french_number_practice
 ```
 
 ## Example

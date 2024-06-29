@@ -1,5 +1,5 @@
 services:
-  app:
+  french_number_practice:
     build:
       context: .
       dockerfile: ./docker/Dockerfile 
