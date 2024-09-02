@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 from __future__ import annotations
 from collections import deque
 
@@ -14,6 +12,47 @@ import time
 import argparse
 
 import num2words
+
+
+def get_args(parser):
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        help="play the game with debug messages enabled",
+        action="store_true",
+    )
+    return parser.parse_args()
+
+
+def get_logger(args) -> logging.Logger:
+    logger = logging.getLogger(__name__)
+    if args.verbose:
+        logger.setLevel(logging.DEBUG)
+    handler = logging.StreamHandler()
+    handler.setFormatter(
+        fmt=logging.Formatter(
+            "{levelname:s}: {asctime:s}.{msecs:.0f} - {message}",
+            "%Y-%d-%m %H:%M:%S",
+            "{",
+        )
+    )
+    logger.addHandler(handler)
+    return logger
+
+
+histfile = os.path.join(os.path.expanduser("~"), ".python_history")
+
+try:
+    readline.read_history_file(histfile)
+    readline.set_history_length(1000)
+except FileNotFoundError:
+    pass
+
+atexit.register(readline.write_history_file, histfile)
+
+args = get_args(argparse.ArgumentParser())
+
+logger = get_logger(args)
 
 
 class Config:
@@ -119,16 +158,19 @@ def try_int_conversion(test_string: str) -> None:
         raise ValueError("Please enter a number")
 
 
-def test_in_range_on_preparation(coordinates: Interval, config: FrenchNumberPracticeConfig) -> None:
+def test_in_range_on_preparation(
+    coordinates: Interval, config: FrenchNumberPracticeConfig
+) -> None:
     if (
-        config.MIN_NUMBER <= coordinates.start <= config.MAX_NUMBER and
-        config.MIN_NUMBER <= coordinates.end <= config.MAX_NUMBER
+        config.MIN_NUMBER <= coordinates.start <= config.MAX_NUMBER
+        and config.MIN_NUMBER <= coordinates.end <= config.MAX_NUMBER
     ):
         return
-    raise ValueError("Both start and end must be within a value from {0:d} to {1:d}".format(
-        config.MIN_NUMBER,
-        config.MAX_NUMBER
-    ))
+    raise ValueError(
+        "Both start and end must be within a value from {0:d} to {1:d}".format(
+            config.MIN_NUMBER, config.MAX_NUMBER
+        )
+    )
 
 
 class TimerResult:
@@ -235,13 +277,17 @@ class PlayingStatus:
         self.mistakes_count += 1
         self.__solved()
 
-    def freeze_with_finished_time(self, timer_result: TimerResult) -> PlayingStatusResult:
+    def freeze_with_finished_time(
+        self, timer_result: TimerResult
+    ) -> PlayingStatusResult:
         return PlayingStatusResult(self, timer_result)
 
 
 class PlayingStatusResult:
 
-    def __init__(self, playing_status: PlayingStatus, timer_result: TimerResult) -> None:
+    def __init__(
+        self, playing_status: PlayingStatus, timer_result: TimerResult
+    ) -> None:
         self.playing_status = playing_status
         self.timer_result = timer_result
 
@@ -253,20 +299,16 @@ class PlayingStatusResult:
             "{0:<50} {1} / {2}".format(
                 "Total problems solved (actual / original)",
                 self.playing_status.attempts_count - self.playing_status.mistakes_count,
-                self.playing_status.queue_length
+                self.playing_status.queue_length,
             ),
             "{0:<50} {1}".format(
-                "Total mistakes made",
-                self.playing_status.mistakes_count
+                "Total mistakes made", self.playing_status.mistakes_count
             ),
             "{0:<50} {1}".format(
                 "Maximum successive correct answer",
-                self.playing_status.correct_successive_count_max
+                self.playing_status.correct_successive_count_max,
             ),
-            "{0:<50} {1}".format(
-                "Total time spent",
-                self.timer_result.express()
-            ),
+            "{0:<50} {1}".format("Total time spent", self.timer_result.express()),
         ]
 
         print("You solved all! Here's the summary:")
@@ -301,10 +343,11 @@ class InplayingFrenchValidator(Validator):
             for user_func in self.user_functions:
                 user_func(test_string=input_str)
             if not self.coordinates.is_in_range_as_opened(int(input_str)):
-                raise ValueError("The value must be within a value from {0:d} to {1:d}".format(
-                    self.coordinates.start,
-                    self.coordinates.end
-                ))
+                raise ValueError(
+                    "The value must be within a value from {0:d} to {1:d}".format(
+                        self.coordinates.start, self.coordinates.end
+                    )
+                )
 
         except ValueError as e:
             logger.error(e)
@@ -337,10 +380,7 @@ class Card:
         self.answer = answer
 
     def __repr__(self) -> str:
-        repr_text = (
-            f"{self.problem}",
-            f"{self.answer}"
-        )
+        repr_text = (f"{self.problem}", f"{self.answer}")
         return f"{__class__.__name__}{repr_text}"
 
 
@@ -373,7 +413,9 @@ class ProblemBuilderFrench(ProblemBuilder):
         coordinates: Generates numbers (problems) within this range.
     """
 
-    def __init__(self, coordinates: HalfOpenedInterval, config: FrenchNumberPracticeConfig) -> None:
+    def __init__(
+        self, coordinates: HalfOpenedInterval, config: FrenchNumberPracticeConfig
+    ) -> None:
         super().__init__(config)
         self.coordinates = coordinates
         self.config = config
@@ -384,10 +426,12 @@ class ProblemBuilderFrench(ProblemBuilder):
         """
 
         for n in range(self.coordinates.start, self.coordinates.end):
-            self.problem_set.append(CardFrench(
-                num2words.num2words(n, lang=self.config.LANGUAGE),
-                str(n),
-            ))
+            self.problem_set.append(
+                CardFrench(
+                    num2words.num2words(n, lang=self.config.LANGUAGE),
+                    str(n),
+                )
+            )
 
         random.shuffle(self.problem_set)
         return deque(self.problem_set)
@@ -398,7 +442,12 @@ class Engine:
     A set of primary routines.
     """
 
-    def __init__(self, queue: deque, playing_status: PlayingStatus, validator: InplayingFrenchValidator) -> None:
+    def __init__(
+        self,
+        queue: deque,
+        playing_status: PlayingStatus,
+        validator: InplayingFrenchValidator,
+    ) -> None:
         self.queue = queue
         self.playing_status = playing_status
         self.validator = validator
@@ -408,7 +457,7 @@ class Engine:
             card = self.queue.pop()
             is_solved = False
 
-            assert (isinstance(card, CardFrench))
+            assert isinstance(card, CardFrench)
 
             while not is_solved:
                 display = card.problem
@@ -435,11 +484,12 @@ class Engine:
                     is_solved = True
 
     def play_then_retrieve_result(self) -> PlayingStatusResult:
-        timer_result = self.playing_status.timer.start(
-        ).execute(
-            self.enable_loop
-        ).stop(
-        ).retrieve_result()
+        timer_result = (
+            self.playing_status.timer.start()
+            .execute(self.enable_loop)
+            .stop()
+            .retrieve_result()
+        )
         return self.playing_status.freeze_with_finished_time(timer_result)
 
     def say_compliment(self) -> None:
@@ -447,9 +497,11 @@ class Engine:
         if self.playing_status.correct_successive_count < 1:
             print("Good guess!")
             return
-        print("Good guess! (consecutive good answers: {0:<d})".format(
-            self.playing_status.correct_successive_count
-        ))
+        print(
+            "Good guess! (consecutive good answers: {0:<d})".format(
+                self.playing_status.correct_successive_count
+            )
+        )
 
     def show_correct_answer(self, correct_answer: str) -> None:
         print(f"The answer: {correct_answer}")
@@ -468,8 +520,7 @@ class Game:
         """
         Defines a range by a user input.
         """
-        print("Specify the two values for the start and end of the "
-              "range.")
+        print("Specify the two values for the start and end of the " "range.")
         print("The values must be separated by a space:")
 
         validated = False
@@ -500,19 +551,14 @@ class Game:
             try:
                 coordinates_half_open = HalfOpenedInterval(start, end)
                 validated = ProblemBuilderFrenchValidator(
-                    functools.partial(
-                        test_in_range_on_preparation,
-                        config=self.config
-                    ),
+                    functools.partial(test_in_range_on_preparation, config=self.config),
                 ).is_valid(coordinates_half_open)
             except ValueError as e:
                 logger.error(e)
 
         coordinates = coordinates_half_open.limit_bottom(
             self.config.MIN_NUMBER
-        ).limit_top(
-            self.config.MAX_NUMBER
-        )
+        ).limit_top(self.config.MAX_NUMBER)
 
         return HalfOpenedInterval(coordinates.start, coordinates.end)
 
@@ -521,8 +567,7 @@ class Game:
         logger.debug(coordinates)
 
         queue = ProblemBuilderFrench(
-            coordinates.to_opened_interval(),
-            self.config
+            coordinates.to_opened_interval(), self.config
         ).get_queue()
 
         validator = InplayingFrenchValidator(
@@ -544,40 +589,6 @@ class Game:
         play_result.show_end_message()
 
 
-def get_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "-v", "--verbose",
-        help="play the game with debug messages enabled",
-        action="store_true"
-    )
-    return parser.parse_args()
-
-
-def get_logger() -> logging.Logger:
-    logger = logging.getLogger(__name__)
-    if args.verbose:
-        logger.setLevel(logging.DEBUG)
-    handler = logging.StreamHandler()
-    handler.setFormatter(fmt=logging.Formatter(
-        "{levelname:s}: {asctime:s}.{msecs:.0f} - {message}",
-        '%Y-%d-%m %H:%M:%S',
-        "{"
-    ))
-    logger.addHandler(handler)
-    return logger
-
-
-if __name__ == "__main__":
-    histfile = os.path.join(os.path.expanduser("~"), ".python_history")
-    try:
-        readline.read_history_file(histfile)
-        # default history len is -1 (infinite), which may grow unruly
-        readline.set_history_length(1000)
-    except FileNotFoundError:
-        pass
-    atexit.register(readline.write_history_file, histfile)
-    args = get_args()
-    logger = get_logger()
+def app():
     game = Game(FrenchNumberPracticeConfig())
     game.play()

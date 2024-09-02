@@ -11,6 +11,8 @@ docopt = "0.6.2"
 num2words = "0.5.13"
 codetiming = "^1.4.0"
 
+[tool.poetry.scripts]
+french = "french_number_practice.cli:app"
 
 [build-system]
 requires = ["poetry-core"]
